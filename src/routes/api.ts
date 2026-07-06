@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
 import { authenticate } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
 import { crudRouter } from '../services/crud.js'
@@ -12,7 +13,7 @@ import {
   StaticPage,
   Inquiry,
 } from '../models/index.js'
-import { login, logout, me } from '../controllers/auth.controller.js'
+import { login, logout, me, updateProfile, changePassword } from '../controllers/auth.controller.js'
 import { listSessions, listAudit } from '../controllers/logs.controller.js'
 
 export const apiRouter = Router()
@@ -28,6 +29,8 @@ apiRouter.use(authenticate)
 
 apiRouter.post('/auth/logout', logout)
 apiRouter.get('/auth/me', me)
+apiRouter.patch('/auth/profile', validate(schemas.profileUpdate), updateProfile)
+apiRouter.post('/auth/change-password', validate(schemas.changePassword), changePassword)
 
 apiRouter.use(
   '/customer-types',
@@ -46,6 +49,14 @@ apiRouter.use(
     entity: 'Customer',
     createSchema: schemas.customerCreate,
     updateSchema: schemas.customerUpdate,
+    // Hash the plaintext password into passwordHash; never persist it raw.
+    transform: (body) => {
+      const { password, ...rest } = body as { password?: string }
+      if (typeof password === 'string' && password.length > 0) {
+        return { ...rest, passwordHash: bcrypt.hashSync(password, 10) }
+      }
+      return rest
+    },
   })
 )
 

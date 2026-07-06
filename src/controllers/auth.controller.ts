@@ -63,9 +63,78 @@ export const login = asyncHandler(async (req, res) => {
   })
 })
 
-// GET /api/auth/me — the currently authenticated admin.
+// GET /api/auth/me — the currently authenticated admin (including mobile, which
+// isn't carried on the JWT-derived req.admin).
 export const me = asyncHandler(async (req, res) => {
-  res.json({ user: req.admin })
+  const admin = await Admin.findByPk(req.admin!.id)
+  if (!admin) throw new HttpError(401, 'Invalid session')
+  res.json({
+    user: {
+      id: admin.get('id'),
+      name: admin.get('name'),
+      email: admin.get('email'),
+      mobile: admin.get('mobile'),
+      sessionDuration: admin.get('sessionDuration'),
+    },
+  })
+})
+
+// PATCH /api/auth/profile — update the signed-in admin's own account details.
+export const updateProfile = asyncHandler(async (req, res) => {
+  const adminId = req.admin!.id
+  const admin = await Admin.findByPk(adminId)
+  if (!admin) throw new HttpError(401, 'Invalid session')
+
+  const { name, email, mobile, sessionDuration } = req.body as {
+    name: string
+    email: string
+    mobile?: string
+    sessionDuration?: string
+  }
+
+  // Guard against claiming an email already used by another admin.
+  if (email !== admin.get('email')) {
+    const clash = await Admin.findOne({ where: { email } })
+    if (clash) throw new HttpError(409, 'That email is already in use')
+  }
+
+  await admin.update({
+    name,
+    email,
+    mobile: mobile ?? null,
+    ...(sessionDuration ? { sessionDuration } : {}),
+  })
+  await audit(req, 'update', 'Admin', adminId, { name, email, mobile, sessionDuration })
+
+  res.json({
+    user: {
+      id: adminId,
+      name: admin.get('name'),
+      email: admin.get('email'),
+      mobile: admin.get('mobile'),
+      sessionDuration: admin.get('sessionDuration'),
+    },
+  })
+})
+
+// POST /api/auth/change-password — verify the current password, then set a new one.
+export const changePassword = asyncHandler(async (req, res) => {
+  const adminId = req.admin!.id
+  const admin = await Admin.findByPk(adminId)
+  if (!admin) throw new HttpError(401, 'Invalid session')
+
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword: string
+    newPassword: string
+  }
+
+  const valid = bcrypt.compareSync(currentPassword, admin.get('passwordHash') as string)
+  if (!valid) throw new HttpError(400, 'Current password is incorrect')
+
+  await admin.update({ passwordHash: bcrypt.hashSync(newPassword, 10) })
+  await audit(req, 'update', 'Admin', adminId, { password: '[changed]' })
+
+  res.json({ success: true })
 })
 
 // POST /api/auth/logout — close the session matching this token (best-effort).

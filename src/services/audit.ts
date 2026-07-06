@@ -8,13 +8,17 @@ interface Actor {
   email?: string | null
 }
 
-// Large / sensitive fields we never want dumped into the audit trail verbatim.
-const REDACT_KEYS = new Set(['imageUrl', 'content', 'password', 'passwordHash'])
+// Secrets are always fully masked, regardless of length.
+const MASK_KEYS = new Set(['password', 'currentPassword', 'newPassword', 'passwordHash'])
+// Large fields we truncate rather than dump verbatim.
+const TRUNCATE_KEYS = new Set(['imageUrl', 'content'])
 
 function redact(changes: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(changes)) {
-    if (REDACT_KEYS.has(key) && typeof value === 'string' && value.length > 120) {
+    if (MASK_KEYS.has(key)) {
+      out[key] = '[redacted]'
+    } else if (TRUNCATE_KEYS.has(key) && typeof value === 'string' && value.length > 120) {
       out[key] = `[${key} omitted, ${value.length} chars]`
     } else {
       out[key] = value

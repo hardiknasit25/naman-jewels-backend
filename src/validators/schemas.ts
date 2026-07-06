@@ -8,6 +8,20 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
+// Update the signed-in admin's own account details (Profile page).
+export const profileUpdate = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  mobile: z.string().min(7, 'Enter a valid mobile number').optional(),
+  sessionDuration: SESSION_DURATION.optional(),
+})
+
+// Change the signed-in admin's password (Profile page).
+export const changePassword = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters'),
+})
+
 // ----- Customer Types (4.5) ------------------------------------------------
 export const customerTypeCreate = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -21,6 +35,8 @@ export const customerCreate = z.object({
   companyName: z.string().min(1, 'Company name is required'),
   mobileNumber: z.string().min(1, 'Mobile number is required'),
   email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  // Set during self-registration; optional for admin-created records.
+  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
   address: z.string().min(1, 'Address is required'),
   city: z.string().min(1, 'City is required'),
   referenceBy: z.string().optional(),
