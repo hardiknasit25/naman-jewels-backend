@@ -1,0 +1,83 @@
+import { z } from 'zod'
+
+const SESSION_DURATION = z.enum(['2h', '4h', '12h', '1d', '1w', '1m'])
+
+// ----- Auth ----------------------------------------------------------------
+export const loginSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  password: z.string().min(1, 'Password is required'),
+})
+
+// ----- Customer Types (4.5) ------------------------------------------------
+export const customerTypeCreate = z.object({
+  name: z.string().min(1, 'Name is required'),
+  order: z.number().int().min(1, 'Order must be 1 or more'),
+  description: z.string().optional(),
+})
+export const customerTypeUpdate = customerTypeCreate.partial()
+
+// ----- Customers (4.4) -----------------------------------------------------
+export const customerCreate = z.object({
+  companyName: z.string().min(1, 'Company name is required'),
+  mobileNumber: z.string().min(1, 'Mobile number is required'),
+  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  address: z.string().min(1, 'Address is required'),
+  city: z.string().min(1, 'City is required'),
+  referenceBy: z.string().optional(),
+  customerTypeId: z.number().int().nullable().optional(),
+  status: z.enum(['pending', 'active', 'blocked', 'rejected']).optional(),
+  lastLogin: z.string().nullable().optional(),
+  sessionDuration: SESSION_DURATION.optional(),
+})
+export const customerUpdate = customerCreate.partial()
+
+// ----- Categories ----------------------------------------------------------
+export const categoryCreate = z.object({
+  name: z.string().min(1, 'Name is required'),
+  parentId: z.number().int().nullable().optional(),
+  description: z.string().optional(),
+})
+export const categoryUpdate = categoryCreate.partial()
+
+// ----- Products (3.5) ------------------------------------------------------
+export const productCreate = z.object({
+  name: z.string().min(1, 'Name is required'),
+  sku: z.string().min(1, 'SKU is required'),
+  categoryId: z.number().int().positive('Category is required'),
+  grossWeight: z.number().positive('Enter a valid weight'),
+  netWeight: z.number().nullable().optional(),
+  size: z.string().optional(),
+  purity: z.string().min(1, 'Purity is required'),
+  stoneDetails: z.string().optional(),
+  notes: z.string().optional(),
+  // Base64 data URL or remote URL; empty string clears the image.
+  imageUrl: z.string().optional(),
+})
+export const productUpdate = productCreate.partial()
+
+// ----- Banners (4.8) -------------------------------------------------------
+export const bannerCreate = z.object({
+  title: z.string().min(1, 'Title is required'),
+  imageUrl: z.string().min(1, 'Image is required'),
+  linkUrl: z.string().optional(),
+  active: z.boolean().optional(),
+  order: z.number().int().min(1, 'Order must be 1 or more'),
+})
+export const bannerUpdate = bannerCreate.partial()
+
+// ----- Static Pages (4.8) --------------------------------------------------
+export const staticPageCreate = z.object({
+  title: z.string().min(1, 'Title is required'),
+  content: z.string().min(1, 'Content is required'),
+})
+export const staticPageUpdate = staticPageCreate.partial()
+
+// ----- Inquiries (4.6) -----------------------------------------------------
+export const inquiryCreate = z.object({
+  customerId: z.number().int().positive('Customer is required'),
+  productId: z.number().int().positive('Product is required'),
+  quantity: z.number().int().positive('Enter a valid quantity'),
+  remark: z.string().optional(),
+  status: z.enum(['New', 'Seen', 'Responded', 'Closed']).optional(),
+})
+export const inquiryUpdate = inquiryCreate.partial()
