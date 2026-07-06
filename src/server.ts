@@ -1,12 +1,10 @@
 import { env } from './config/env.js'
 import { createApp } from './app.js'
 import { initModels } from './models/index.js'
-import { seedDatabase } from './seed.js'
 
 async function start() {
-  // Connect to MySQL, create the schema/tables if needed, then seed once.
+  // Connect to MySQL and create the schema/tables if needed.
   await initModels()
-  await seedDatabase()
 
   const app = createApp()
   app.listen(env.PORT, () => {
