@@ -33,7 +33,14 @@ let initialized = false
 // Connect, create the schema if needed, and sync all tables. Idempotent.
 export async function initModels(): Promise<void> {
   if (initialized) return
-  await ensureDatabase()
+  // Managed/shared MySQL hosts (and Vercel) usually forbid CREATE DATABASE and
+  // ship the schema pre-created. Treat this as best-effort so a permission error
+  // here doesn't block startup when the database already exists.
+  try {
+    await ensureDatabase()
+  } catch (err) {
+    console.warn('⚠️  Skipping database creation (assuming it already exists):', err)
+  }
   await sequelize.authenticate()
   await sequelize.sync()
   initialized = true

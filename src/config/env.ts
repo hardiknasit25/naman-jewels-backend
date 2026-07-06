@@ -32,8 +32,10 @@ const parsed = EnvSchema.safeParse(process.env)
 
 if (!parsed.success) {
   const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n')
-  console.error(`❌ Invalid environment configuration:\n${issues}`)
-  process.exit(1)
+  // Throw rather than process.exit: on serverless (Vercel) a hard exit produces
+  // an opaque FUNCTION_INVOCATION_FAILED, whereas a thrown error is logged with
+  // the offending variables so misconfigured env vars are obvious.
+  throw new Error(`Invalid environment configuration:\n${issues}`)
 }
 
 export const env = parsed.data
