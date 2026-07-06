@@ -7,36 +7,55 @@
 // vercel.json rewrites every incoming path to this function, and req.url keeps
 // the original path (e.g. /api/auth/login), so the Express router mounted at
 // "/api" handles it exactly as it does locally.
-import { createApp } from '../src/app.js'
-import { initModels } from '../src/models/index.js'
+import type { IncomingMessage, ServerResponse } from 'http'
 
-// Build the Express app once and reuse it across warm invocations. The CORS
-// middleware is active immediately, so even error responses carry CORS headers.
-const app = createApp()
+type NodeHandler = (req: IncomingMessage, res: ServerResponse) => void
 
-// Connect to MySQL lazily, once per container, and cache the promise. On
-// failure we reset the cache so a later invocation can retry.
-let dbReady: Promise<void> | null = null
-function ensureDb(): Promise<void> {
-  if (!dbReady) {
-    dbReady = initModels().catch((err) => {
-      dbReady = null
+// Build the Express app + DB connection lazily, inside an async function rather
+// than at module top level. This is deliberate: config errors (e.g. a missing
+// env var, which src/config/env.ts throws on) then surface as a readable JSON
+// 500 below, instead of collapsing into an opaque FUNCTION_INVOCATION_FAILED
+// crash page that hides the real cause. The promise is cached across warm
+// invocations; on failure the cache is reset so a later request can retry.
+let appPromise: Promise<NodeHandler> | null = null
+function getApp(): Promise<NodeHandler> {
+  if (!appPromise) {
+    appPromise = (async () => {
+      const { createApp } = await import('../src/app.js')
+      const { initModels } = await import('../src/models/index.js')
+      const app = createApp() as unknown as NodeHandler
+      try {
+        // Connect to MySQL once per warm container. A DB failure must not kill
+        // the whole app: routes that don't need the DB (e.g. /api/health) keep
+        // working, and DB-backed routes return a normal Express error.
+        await initModels()
+      } catch (err) {
+        console.error('❌ Database initialisation failed:', err)
+      }
+      return app
+    })().catch((err) => {
+      appPromise = null
       throw err
     })
   }
-  return dbReady
+  return appPromise
 }
 
-export default async function handler(req: unknown, res: unknown) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
-    await ensureDb()
+    const app = await getApp()
+    return app(req, res)
   } catch (err) {
-    // Don't hard-crash the function: fall through to the Express app so CORS +
-    // the central error handler still respond. A route that needs the DB will
-    // return a normal CORS-enabled 500 instead of an opaque, header-less
-    // FUNCTION_INVOCATION_FAILED (which the browser misreports as a CORS error).
-    console.error('❌ Database initialisation failed:', err)
+    // The app itself couldn't be built — almost always a bad/missing env var.
+    // Respond with the actual message (and CORS headers, so the browser shows
+    // it rather than masking it as a CORS error) instead of crashing.
+    const detail = err instanceof Error ? err.message : String(err)
+    console.error('❌ Function failed to initialise:', err)
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Headers', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
+    res.setHeader('Content-Type', 'application/json')
+    res.statusCode = 500
+    res.end(JSON.stringify({ error: 'Server configuration error', detail }))
   }
-  // The Express app is itself a (req, res) request listener.
-  return (app as (req: unknown, res: unknown) => void)(req, res)
 }
