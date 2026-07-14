@@ -1,3 +1,4 @@
+import { DataTypes } from 'sequelize'
 import { sequelize, ensureDatabase } from '../config/database.js'
 import { Admin } from './Admin.js'
 import { CustomerType } from './CustomerType.js'
@@ -43,5 +44,38 @@ export async function initModels(): Promise<void> {
   }
   await sequelize.authenticate()
   await sequelize.sync()
+  await ensureColumns()
   initialized = true
+}
+
+// sequelize.sync() (without { alter }) creates missing tables but never adds new
+// columns to existing ones. This idempotently adds columns introduced after a
+// table was first created, without altering or dropping any existing data.
+async function ensureColumns(): Promise<void> {
+  const qi = sequelize.getQueryInterface()
+
+  const additions: { table: string; column: string; spec: Parameters<typeof qi.addColumn>[2] }[] = [
+    { table: 'tbl_products', column: 'images', spec: { type: DataTypes.JSON, allowNull: true } },
+    {
+      table: 'tbl_products',
+      column: 'visibility',
+      spec: { type: DataTypes.ENUM('public', 'private'), allowNull: false, defaultValue: 'public' },
+    },
+    { table: 'tbl_categories', column: 'imageUrl', spec: { type: DataTypes.TEXT('long'), allowNull: true } },
+    { table: 'tbl_customers', column: 'passwordHash', spec: { type: DataTypes.STRING(200), allowNull: true } },
+  ]
+
+  for (const { table, column, spec } of additions) {
+    try {
+      const describe = await qi.describeTable(table)
+      if (!describe[column]) {
+        await qi.addColumn(table, column, spec)
+        console.log(`🧩 Added missing column ${table}.${column}`)
+      }
+    } catch (err) {
+      // Table may not exist yet on a fresh DB (sync just created it with the
+      // column) — safe to ignore.
+      console.warn(`⚠️  Could not ensure column ${table}.${column}:`, err)
+    }
+  }
 }

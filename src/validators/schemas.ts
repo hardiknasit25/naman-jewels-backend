@@ -52,6 +52,8 @@ export const categoryCreate = z.object({
   name: z.string().min(1, 'Name is required'),
   parentId: z.number().int().nullable().optional(),
   description: z.string().optional(),
+  // Base64 data URL or remote URL; empty string clears the image.
+  imageUrl: z.string().optional(),
 })
 export const categoryUpdate = categoryCreate.partial()
 
@@ -66,8 +68,12 @@ export const productCreate = z.object({
   purity: z.string().min(1, 'Purity is required'),
   stoneDetails: z.string().optional(),
   notes: z.string().optional(),
-  // Base64 data URL or remote URL; empty string clears the image.
+  // Primary image — Base64 data URL or remote URL; empty string clears the image.
   imageUrl: z.string().optional(),
+  // Gallery images (Base64 data URLs or remote URLs) — no fixed limit.
+  images: z.array(z.string()).optional(),
+  // Customer-app visibility: 'public' shows the product, 'private' hides it.
+  visibility: z.enum(['public', 'private']).optional(),
 })
 export const productUpdate = productCreate.partial()
 

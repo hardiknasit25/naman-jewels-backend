@@ -14,7 +14,17 @@ export const Product = sequelize.define('Product', {
   purity: { type: DataTypes.STRING(120), allowNull: false },
   stoneDetails: { type: DataTypes.STRING(500), allowNull: true },
   notes: { type: DataTypes.STRING(500), allowNull: true },
-  // Media stored as a Base64 data URL (or a remote URL). LONGTEXT holds large images.
+  // 'public' = visible to customers; 'private' = hidden from the customer app.
+  // Defaults to 'public' so existing products stay visible.
+  visibility: {
+    type: DataTypes.ENUM('public', 'private'),
+    allowNull: false,
+    defaultValue: 'public',
+  },
+  // Primary image (kept for backward compatibility / list thumbnails). Mirrors
+  // images[0]. Stored as a Base64 data URL (or a remote URL); LONGTEXT holds large images.
   imageUrl: { type: DataTypes.TEXT('long'), allowNull: true },
+  // Gallery of up to 5 images (Base64 data URLs or remote URLs) as a JSON array.
+  images: { type: DataTypes.JSON, allowNull: true },
   createdAt: createdAtColumn,
 }, { tableName: 'tbl_products' })
