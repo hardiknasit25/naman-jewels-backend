@@ -22,6 +22,34 @@ export const changePassword = z.object({
   newPassword: z.string().min(8, 'New password must be at least 8 characters'),
 })
 
+// ----- Customer app auth ---------------------------------------------------
+// The customer app signs in with mobile + password (not email like the admin panel).
+export const customerLogin = z.object({
+  mobileNumber: z.string().min(1, 'Mobile number is required'),
+  password: z.string().min(1, 'Password is required'),
+})
+
+// Self-registration from the app. The customer never chooses their own tier or
+// status — both are assigned by an admin on approval, so those keys are absent
+// here on purpose (Zod strips them if a client sends them anyway).
+export const customerRegister = z.object({
+  companyName: z.string().min(1, 'Company name is required'),
+  mobileNumber: z.string().min(7, 'Enter a valid mobile number'),
+  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  address: z.string().min(1, 'Address is required'),
+  city: z.string().min(1, 'City is required'),
+  referenceBy: z.string().optional(),
+})
+
+// An inquiry raised from the app. customerId is taken from the JWT, never the
+// body, so a customer cannot file an inquiry as someone else.
+export const customerInquiryCreate = z.object({
+  productId: z.number().int().positive('Product is required'),
+  quantity: z.number().int().positive('Enter a valid quantity'),
+  remark: z.string().max(500).optional(),
+})
+
 // ----- Customer Types (4.5) ------------------------------------------------
 export const customerTypeCreate = z.object({
   name: z.string().min(1, 'Name is required'),

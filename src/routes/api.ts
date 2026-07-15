@@ -15,6 +15,7 @@ import {
 } from '../models/index.js'
 import { login, logout, me, updateProfile, changePassword } from '../controllers/auth.controller.js'
 import { listSessions, listAudit } from '../controllers/logs.controller.js'
+import { customerRouter } from './customer.js'
 
 export const apiRouter = Router()
 
@@ -24,7 +25,13 @@ apiRouter.get('/health', (_req, res) => {
 })
 apiRouter.post('/auth/login', validate(schemas.loginSchema), login)
 
-// ----- Everything below requires a valid JWT -------------------------------
+// ----- Customer app --------------------------------------------------------
+// Mounted BEFORE the admin gate below: this router brings its own customer auth
+// (and its register/login must stay public). Moving it below `authenticate`
+// would make every customer route demand an admin token.
+apiRouter.use('/customer', customerRouter)
+
+// ----- Everything below requires a valid ADMIN JWT -------------------------
 apiRouter.use(authenticate)
 
 apiRouter.post('/auth/logout', logout)

@@ -5,7 +5,12 @@ import { HttpError } from '../utils/httpError.js'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof HttpError) {
-    return res.status(err.status).json({ message: err.message })
+    // `code` is only included when the thrower set one, so existing callers keep
+    // their exact { message } response shape.
+    return res.status(err.status).json({
+      message: err.message,
+      ...(err.code ? { code: err.code } : {}),
+    })
   }
   console.error('Unhandled error:', err)
   const message = err instanceof Error ? err.message : 'Internal server error'

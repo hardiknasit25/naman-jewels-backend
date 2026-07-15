@@ -8,6 +8,8 @@ export interface JwtPayload {
   sub: number
   email: string
   jti: string
+  /** Set only on customer-app tokens; admin tokens never carry an audience. */
+  aud?: string
 }
 
 // Verifies the Bearer JWT and attaches the admin to req.admin. A missing,
@@ -25,6 +27,11 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
   } catch {
     throw new HttpError(401, 'Session expired, please sign in again')
   }
+
+  // Customer-app tokens are signed with the same secret and carry a numeric `sub`
+  // from a different table, so without this check a customer token would
+  // authenticate as the admin sharing its id. Admin tokens set no audience.
+  if (payload.aud) throw new HttpError(401, 'Invalid session')
 
   const admin = await Admin.findByPk(payload.sub)
   if (!admin) throw new HttpError(401, 'Invalid session')
