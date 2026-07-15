@@ -54,23 +54,32 @@ export async function initModels(): Promise<void> {
 async function ensureColumns(): Promise<void> {
   const qi = sequelize.getQueryInterface()
 
-  const additions: { table: string; column: string; spec: Parameters<typeof qi.addColumn>[2] }[] = [
+  const additions: {
+    table: string
+    column: string
+    spec: Parameters<typeof qi.addColumn>[2]
+    /** Runs once, right after the column is created, to seed existing rows. */
+    afterAdd?: () => Promise<void>
+  }[] = [
     { table: 'tbl_products', column: 'images', spec: { type: DataTypes.JSON, allowNull: true } },
     {
       table: 'tbl_products',
-      column: 'visibility',
-      spec: { type: DataTypes.ENUM('public', 'private'), allowNull: false, defaultValue: 'public' },
+      column: 'status',
+      spec: { type: DataTypes.ENUM('live', 'private'), allowNull: false, defaultValue: 'live' },
+      afterAdd: backfillProductStatus,
     },
+    { table: 'tbl_products', column: 'customerTypeIds', spec: { type: DataTypes.JSON, allowNull: true } },
     { table: 'tbl_categories', column: 'imageUrl', spec: { type: DataTypes.TEXT('long'), allowNull: true } },
     { table: 'tbl_customers', column: 'passwordHash', spec: { type: DataTypes.STRING(200), allowNull: true } },
   ]
 
-  for (const { table, column, spec } of additions) {
+  for (const { table, column, spec, afterAdd } of additions) {
     try {
       const describe = await qi.describeTable(table)
       if (!describe[column]) {
         await qi.addColumn(table, column, spec)
         console.log(`🧩 Added missing column ${table}.${column}`)
+        if (afterAdd) await afterAdd()
       }
     } catch (err) {
       // Table may not exist yet on a fresh DB (sync just created it with the
@@ -78,4 +87,25 @@ async function ensureColumns(): Promise<void> {
       console.warn(`⚠️  Could not ensure column ${table}.${column}:`, err)
     }
   }
+}
+
+// The publish gate used to live in tbl_products.visibility ENUM('public','private').
+// Carry those values into the new `status` column so products an admin had hidden
+// stay hidden. Deliberately called only from the afterAdd hook above — it must run
+// on the single boot that creates `status`, never again, or it would overwrite
+// every status change an admin has made since.
+//
+// The old `visibility` column is intentionally left in place rather than dropped:
+// nothing reads it any more, and keeping it means this migration loses no data and
+// can be reverted by hand. It can be dropped manually once the rollout is settled.
+async function backfillProductStatus(): Promise<void> {
+  const describe = await sequelize.getQueryInterface().describeTable('tbl_products')
+  // Fresh databases never had a visibility column — nothing to carry over, and
+  // the column default ('live') is already correct.
+  if (!describe.visibility) return
+
+  const [affected] = await sequelize.query(
+    "UPDATE tbl_products SET status = CASE WHEN visibility = 'private' THEN 'private' ELSE 'live' END"
+  )
+  console.log(`🔁 Backfilled tbl_products.status from visibility (${JSON.stringify(affected)})`)
 }

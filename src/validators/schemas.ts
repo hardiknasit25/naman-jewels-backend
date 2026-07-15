@@ -72,8 +72,13 @@ export const productCreate = z.object({
   imageUrl: z.string().optional(),
   // Gallery images (Base64 data URLs or remote URLs) — no fixed limit.
   images: z.array(z.string()).optional(),
-  // Customer-app visibility: 'public' shows the product, 'private' hides it.
-  visibility: z.enum(['public', 'private']).optional(),
+  // Publish gate: 'live' shows the product in the customer app, 'private' hides
+  // it from every customer regardless of the tier tags below.
+  status: z.enum(['live', 'private']).optional(),
+  // 2.2 Customer type tiers this product is tagged to. Visibility is cumulative
+  // (a tier also sees everything tagged below it), so tagging the lowest tier
+  // reaches everyone. Empty means every tier sees it.
+  customerTypeIds: z.array(z.number().int().positive()).optional(),
 })
 export const productUpdate = productCreate.partial()
 

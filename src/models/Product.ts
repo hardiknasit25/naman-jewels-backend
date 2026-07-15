@@ -14,13 +14,20 @@ export const Product = sequelize.define('Product', {
   purity: { type: DataTypes.STRING(120), allowNull: false },
   stoneDetails: { type: DataTypes.STRING(500), allowNull: true },
   notes: { type: DataTypes.STRING(500), allowNull: true },
-  // 'public' = visible to customers; 'private' = hidden from the customer app.
-  // Defaults to 'public' so existing products stay visible.
-  visibility: {
-    type: DataTypes.ENUM('public', 'private'),
+  // Publish gate: 'live' = published to the customer app, 'private' = hidden from
+  // every customer regardless of tier tags. Supersedes the old
+  // visibility ENUM('public','private') column, which is left untouched in the
+  // database (its values are backfilled into status once) but no longer read.
+  status: {
+    type: DataTypes.ENUM('live', 'private'),
     allowNull: false,
-    defaultValue: 'public',
+    defaultValue: 'live',
   },
+  // 2.2 Customer Types — the tiers this product is tagged to, as a JSON array of
+  // CustomerType ids. Visibility is cumulative: a customer sees a product tagged
+  // to their own tier or to any tier below theirs (see services/productVisibility).
+  // Empty/null means every tier sees it, so untagged products stay visible.
+  customerTypeIds: { type: DataTypes.JSON, allowNull: true },
   // Primary image (kept for backward compatibility / list thumbnails). Mirrors
   // images[0]. Stored as a Base64 data URL (or a remote URL); LONGTEXT holds large images.
   imageUrl: { type: DataTypes.TEXT('long'), allowNull: true },
