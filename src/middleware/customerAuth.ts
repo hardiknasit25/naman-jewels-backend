@@ -43,8 +43,10 @@ export const authenticateCustomer = asyncHandler(async (req, _res, next) => {
   if (!customer) throw new HttpError(401, 'Invalid session')
 
   // A customer blocked/rejected after their token was issued must lose access now.
+  // Pending customers keep access but, having no tier (customerTypeId === null),
+  // only ever see untagged/public products — visibleTypeIdsFor(null) returns [].
   const status = customer.get('status') as string
-  if (status !== 'active') {
+  if (status === 'blocked' || status === 'rejected') {
     throw new HttpError(403, statusMessage(status), status)
   }
 

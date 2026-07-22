@@ -106,10 +106,12 @@ export const login = asyncHandler(async (req, res) => {
     throw new HttpError(401, 'Invalid mobile number or password', 'invalid')
   }
 
-  // Pending/blocked/rejected accounts get a specific reason so the app can
-  // explain what's happening instead of showing "wrong password".
+  // Blocked/rejected accounts are refused with a specific reason. Pending accounts
+  // are let in with a limited session: they have no tier, so the product API only
+  // returns untagged/public products until an admin approves them and assigns a
+  // tier. See middleware/customerAuth.ts and services/productVisibility.ts.
   const status = customer.get('status') as string
-  if (status !== 'active') {
+  if (status === 'blocked' || status === 'rejected') {
     throw new HttpError(403, statusMessage(status), status)
   }
 
