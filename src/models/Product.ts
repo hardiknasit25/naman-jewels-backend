@@ -10,6 +10,11 @@ export const Product = sequelize.define('Product', {
   categoryId: { type: DataTypes.INTEGER, allowNull: false },
   grossWeight: { type: DataTypes.FLOAT, allowNull: false },
   netWeight: { type: DataTypes.FLOAT, allowNull: true },
+  // Optional itemized breakdown of the "less" (deducted) weight, as a JSON array
+  // of { label, weight } rows the admin can add freely (Stone, Kundan, Meena, …).
+  // Display-only: the total less weight shown in the app is Gross − Net; these
+  // rows explain what makes it up. Null/empty when no breakdown was entered.
+  lessFactors: { type: DataTypes.JSON, allowNull: true },
   size: { type: DataTypes.STRING(120), allowNull: true },
   purity: { type: DataTypes.STRING(120), allowNull: false },
   stoneDetails: { type: DataTypes.STRING(500), allowNull: true },

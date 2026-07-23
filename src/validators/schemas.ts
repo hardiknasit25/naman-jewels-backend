@@ -94,6 +94,12 @@ export const productCreate = z.object({
   categoryId: z.number().int().positive('Category is required'),
   grossWeight: z.number().positive('Enter a valid weight'),
   netWeight: z.number().nullable().optional(),
+  // Optional itemized breakdown of the less (deducted) weight — the admin can add
+  // any number of named factor rows. Display-only; does not affect Gross/Net.
+  lessFactors: z
+    .array(z.object({ label: z.string().min(1), weight: z.number() }))
+    .nullable()
+    .optional(),
   size: z.string().optional(),
   purity: z.string().min(1, 'Purity is required'),
   stoneDetails: z.string().optional(),
