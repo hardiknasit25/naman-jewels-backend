@@ -22,6 +22,10 @@ export const Customer = sequelize.define('Customer', {
     defaultValue: 'pending',
   },
   lastLogin: { type: DataTypes.DATE, allowNull: true },
+  // Set when an admin force-logs-out the customer. Any customer-app JWT issued
+  // BEFORE this instant is treated as dead by authenticateCustomer, so a live
+  // session ends on the customer's next request. Cleared on the next login.
+  sessionInvalidatedAt: { type: DataTypes.DATE, allowNull: true },
   // Per-customer session length (drives JWT expiry for the customer app).
   sessionDuration: {
     type: DataTypes.ENUM(...SESSION_DURATIONS),

@@ -71,6 +71,8 @@ export const customerCreate = z.object({
   customerTypeId: z.number().int().nullable().optional(),
   status: z.enum(['pending', 'active', 'blocked', 'rejected']).optional(),
   lastLogin: z.string().nullable().optional(),
+  // Set by the admin "Force Logout" action to end the customer's live session.
+  sessionInvalidatedAt: z.string().nullable().optional(),
   sessionDuration: SESSION_DURATION.optional(),
 })
 export const customerUpdate = customerCreate.partial()

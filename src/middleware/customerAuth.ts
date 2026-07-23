@@ -15,6 +15,8 @@ export interface CustomerJwtPayload {
   email: string
   jti: string
   aud: 'customer'
+  /** Issued-at, seconds since epoch. Added automatically by jwt.sign. */
+  iat?: number
 }
 
 export const CUSTOMER_AUDIENCE = 'customer'
@@ -48,6 +50,18 @@ export const authenticateCustomer = asyncHandler(async (req, _res, next) => {
   const status = customer.get('status') as string
   if (status === 'blocked' || status === 'rejected') {
     throw new HttpError(403, statusMessage(status), status)
+  }
+
+  // Force-logout: an admin stamps sessionInvalidatedAt, killing every token issued
+  // before that instant. The JWT may still be within its expiry, but the session
+  // is over — the app treats this 401 like any expired token and returns to login.
+  const invalidatedAt = customer.get('sessionInvalidatedAt') as Date | string | null
+  if (invalidatedAt) {
+    const cutoffMs = new Date(invalidatedAt).getTime()
+    const issuedAtMs = typeof payload.iat === 'number' ? payload.iat * 1000 : 0
+    if (issuedAtMs < cutoffMs) {
+      throw new HttpError(401, 'Your session has been ended. Please sign in again.', 'session_ended')
+    }
   }
 
   req.customer = {

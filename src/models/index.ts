@@ -71,6 +71,7 @@ async function ensureColumns(): Promise<void> {
     { table: 'tbl_products', column: 'customerTypeIds', spec: { type: DataTypes.JSON, allowNull: true } },
     { table: 'tbl_categories', column: 'imageUrl', spec: { type: DataTypes.TEXT('long'), allowNull: true } },
     { table: 'tbl_customers', column: 'passwordHash', spec: { type: DataTypes.STRING(200), allowNull: true } },
+    { table: 'tbl_customers', column: 'sessionInvalidatedAt', spec: { type: DataTypes.DATE, allowNull: true } },
   ]
 
   for (const { table, column, spec, afterAdd } of additions) {

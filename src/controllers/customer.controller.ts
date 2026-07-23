@@ -124,7 +124,9 @@ export const login = asyncHandler(async (req, res) => {
     audience: CUSTOMER_AUDIENCE,
   })
 
-  await customer.update({ lastLogin: new Date() })
+  // Clear any force-logout stamp: this new token is issued now, so the session is
+  // valid again. Without this a same-second re-login could still look invalidated.
+  await customer.update({ lastLogin: new Date(), sessionInvalidatedAt: null })
   await audit(req, 'login', 'Customer', id, null, { id, email })
 
   res.json({ token, customer: publicCustomer(customer) })
