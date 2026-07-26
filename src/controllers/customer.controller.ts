@@ -256,12 +256,17 @@ export const listCategories = asyncHandler(async (req, res) => {
 
 // GET /api/customer/carats?categoryId= — the carat (purity) filter chips.
 //
-// Only ACTIVE carats from the master are offered, in the admin's display order,
-// and only those that actually have a product this customer may see: the count is
-// taken from the same tier-filtered set the product list uses, so a chip can never
-// reveal a purity that exists solely on private or higher-tier products, and can
-// never lead to an empty result. Pass categoryId to scope the chips (and their
-// counts) to one category and its sub-categories, exactly as the product list does.
+// EVERY active carat in the master is offered, in the admin's display order, so
+// the chip row is the same stable set of purities on every product screen rather
+// than shifting with whatever happens to be in stock.
+//
+// productCount is how many products this customer can actually see for that
+// carat — counted from the same tier-filtered set the product list uses, scoped
+// to categoryId (and its sub-categories) when given, exactly as the product list
+// scopes. It is a COUNT ONLY and never hides a chip: a carat whose products are
+// all private or above this customer's tier still shows, reporting 0, and tapping
+// it lands on the "no products in this purity" empty state. No product is ever
+// exposed through this endpoint that the product list wouldn't also return.
 export const listCarats = asyncHandler(async (req, res) => {
   const { categoryId } = req.query as { categoryId?: string }
 
@@ -285,12 +290,10 @@ export const listCarats = asyncHandler(async (req, res) => {
     if (id != null) counts.set(id, (counts.get(id) ?? 0) + 1)
   }
 
-  const payload = carats
-    .map((c) => ({
-      ...(c.get({ plain: true }) as Record<string, unknown>),
-      productCount: counts.get(c.get('id') as number) ?? 0,
-    }))
-    .filter((c) => (c.productCount as number) > 0)
+  const payload = carats.map((c) => ({
+    ...(c.get({ plain: true }) as Record<string, unknown>),
+    productCount: counts.get(c.get('id') as number) ?? 0,
+  }))
 
   res.json(payload)
 })
