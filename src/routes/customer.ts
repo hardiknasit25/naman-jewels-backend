@@ -24,6 +24,7 @@ customerRouter.get('/products', c.listProducts)
 customerRouter.get('/products/:id', c.getProduct)
 
 customerRouter.get('/categories', c.listCategories)
+customerRouter.get('/carats', c.listCarats)
 customerRouter.get('/customer-types', c.listCustomerTypes)
 customerRouter.get('/banners', c.listBanners)
 

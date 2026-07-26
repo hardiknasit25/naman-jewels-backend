@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { Op } from 'sequelize'
 import { env } from '../config/env.js'
-import { Banner, Category, Customer, CustomerType, Inquiry, Product, StaticPage } from '../models/index.js'
+import { Banner, Carat, Category, Customer, CustomerType, Inquiry, Product, StaticPage } from '../models/index.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { HttpError } from '../utils/httpError.js'
 import { newId } from '../utils/id.js'
@@ -171,17 +171,26 @@ async function visibleProductsFor(customerTypeId: number | null, lightweight = t
   )
 }
 
-// GET /api/customer/products?search=&categoryId=
+// GET /api/customer/products?search=&categoryId=&caratId=
 // One endpoint backs the home feed, category listing, and search — all three are
 // the same tier-filtered set with an optional narrowing.
 export const listProducts = asyncHandler(async (req, res) => {
-  const { search, categoryId } = req.query as { search?: string; categoryId?: string }
+  const { search, categoryId, caratId } = req.query as {
+    search?: string; categoryId?: string; caratId?: string
+  }
   let rows = await visibleProductsFor(req.customer!.customerTypeId)
 
   if (categoryId) {
     // Include sub-categories, matching the app's previous categoryTreeIds().
     const wanted = new Set(await categoryTreeIds(Number(categoryId)))
     rows = rows.filter((p) => wanted.has(p.get('categoryId') as number))
+  }
+
+  // Carat (purity) chip filter. Applied AFTER the tier gate above, never instead
+  // of it — narrowing by carat must not widen what the customer can see.
+  const carat = Number(caratId)
+  if (caratId && Number.isInteger(carat) && carat > 0) {
+    rows = rows.filter((p) => (p.get('caratId') as number | null) === carat)
   }
 
   if (search && search.trim()) {
@@ -241,6 +250,47 @@ export const listCategories = asyncHandler(async (req, res) => {
       (direct.get(id) ?? 0) + childIds.reduce((sum, cid) => sum + (direct.get(cid) ?? 0), 0)
     return { ...(c.get({ plain: true }) as Record<string, unknown>), productCount }
   })
+
+  res.json(payload)
+})
+
+// GET /api/customer/carats?categoryId= — the carat (purity) filter chips.
+//
+// Only ACTIVE carats from the master are offered, in the admin's display order,
+// and only those that actually have a product this customer may see: the count is
+// taken from the same tier-filtered set the product list uses, so a chip can never
+// reveal a purity that exists solely on private or higher-tier products, and can
+// never lead to an empty result. Pass categoryId to scope the chips (and their
+// counts) to one category and its sub-categories, exactly as the product list does.
+export const listCarats = asyncHandler(async (req, res) => {
+  const { categoryId } = req.query as { categoryId?: string }
+
+  const [carats, allProducts] = await Promise.all([
+    Carat.findAll({
+      where: { active: true },
+      order: [['order', 'ASC'], ['name', 'ASC']],
+    }),
+    visibleProductsFor(req.customer!.customerTypeId),
+  ])
+
+  let products = allProducts
+  if (categoryId) {
+    const wanted = new Set(await categoryTreeIds(Number(categoryId)))
+    products = products.filter((p) => wanted.has(p.get('categoryId') as number))
+  }
+
+  const counts = new Map<number, number>()
+  for (const p of products) {
+    const id = p.get('caratId') as number | null
+    if (id != null) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+
+  const payload = carats
+    .map((c) => ({
+      ...(c.get({ plain: true }) as Record<string, unknown>),
+      productCount: counts.get(c.get('id') as number) ?? 0,
+    }))
+    .filter((c) => (c.productCount as number) > 0)
 
   res.json(payload)
 })
