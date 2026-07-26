@@ -1,9 +1,10 @@
-import { DataTypes } from 'sequelize'
+import { DataTypes, QueryTypes } from 'sequelize'
 import { sequelize, ensureDatabase } from '../config/database.js'
 import { Admin } from './Admin.js'
 import { CustomerType } from './CustomerType.js'
 import { Customer } from './Customer.js'
 import { Category } from './Category.js'
+import { Carat } from './Carat.js'
 import { Product } from './Product.js'
 import { Banner } from './Banner.js'
 import { StaticPage } from './StaticPage.js'
@@ -17,6 +18,7 @@ export {
   CustomerType,
   Customer,
   Category,
+  Carat,
   Product,
   Banner,
   StaticPage,
@@ -70,6 +72,12 @@ async function ensureColumns(): Promise<void> {
     },
     { table: 'tbl_products', column: 'customerTypeIds', spec: { type: DataTypes.JSON, allowNull: true } },
     { table: 'tbl_products', column: 'lessFactors', spec: { type: DataTypes.JSON, allowNull: true } },
+    {
+      table: 'tbl_products',
+      column: 'caratId',
+      spec: { type: DataTypes.INTEGER, allowNull: true },
+      afterAdd: backfillProductCarats,
+    },
     { table: 'tbl_categories', column: 'imageUrl', spec: { type: DataTypes.TEXT('long'), allowNull: true } },
     { table: 'tbl_customers', column: 'passwordHash', spec: { type: DataTypes.STRING(200), allowNull: true } },
     { table: 'tbl_customers', column: 'sessionInvalidatedAt', spec: { type: DataTypes.DATE, allowNull: true } },
@@ -100,6 +108,38 @@ async function ensureColumns(): Promise<void> {
 // The old `visibility` column is intentionally left in place rather than dropped:
 // nothing reads it any more, and keeping it means this migration loses no data and
 // can be reverted by hand. It can be dropped manually once the rollout is settled.
+// Products used to carry their purity as free text ("22K Gold"). The carat master
+// replaces that, so on the single boot that adds tbl_products.caratId we seed the
+// master with one carat per distinct purity already in use and point each product
+// at its match. That way the dropdown starts populated with exactly what the shop
+// uses and no existing product loses its purity.
+//
+// `purity` itself is deliberately left in place and kept in sync by the API — it is
+// NOT NULL on older databases, and other consumers may still read it.
+async function backfillProductCarats(): Promise<void> {
+  const describe = await sequelize.getQueryInterface().describeTable('tbl_products')
+  // Fresh database — nothing to carry over; the admin fills the master by hand.
+  if (!describe.purity) return
+
+  const rows = (await sequelize.query(
+    "SELECT DISTINCT purity FROM tbl_products WHERE purity IS NOT NULL AND purity <> ''",
+    { type: QueryTypes.SELECT }
+  )) as { purity: string }[]
+  if (rows.length === 0) return
+
+  let order = 1
+  for (const { purity } of rows) {
+    const [carat] = await Carat.findOrCreate({
+      where: { name: purity },
+      defaults: { name: purity, order: order++, active: true, createdAt: new Date() },
+    })
+    await sequelize.query('UPDATE tbl_products SET caratId = :id WHERE purity = :purity', {
+      replacements: { id: carat.get('id') as number, purity },
+    })
+  }
+  console.log(`🔁 Seeded ${rows.length} carat(s) from existing product purity values`)
+}
+
 async function backfillProductStatus(): Promise<void> {
   const describe = await sequelize.getQueryInterface().describeTable('tbl_products')
   // Fresh databases never had a visibility column — nothing to carry over, and

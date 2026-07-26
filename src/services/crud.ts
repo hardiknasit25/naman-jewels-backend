@@ -12,8 +12,14 @@ interface CrudOptions {
   entity: string
   createSchema: ZodType
   updateSchema: ZodType
-  /** Optionally transform the validated body before create/update (e.g. stamp updatedAt). */
-  transform?: (body: Record<string, unknown>) => Record<string, unknown>
+  /**
+   * Optionally transform the validated body before create/update (e.g. stamp
+   * updatedAt, hash a password). May be async when the transform needs to read
+   * another table — e.g. products resolving the carat name into `purity`.
+   */
+  transform?: (
+    body: Record<string, unknown>
+  ) => Record<string, unknown> | Promise<Record<string, unknown>>
 }
 
 // Builds a standard REST router for one entity:
@@ -23,7 +29,8 @@ interface CrudOptions {
 export function crudRouter(opts: CrudOptions): Router {
   const { model, entity, createSchema, updateSchema, transform } = opts
   const router = express.Router()
-  const apply = (body: Record<string, unknown>) => (transform ? transform(body) : body)
+  const apply = async (body: Record<string, unknown>) =>
+    transform ? await transform(body) : body
 
   router.get(
     '/',
@@ -47,7 +54,7 @@ export function crudRouter(opts: CrudOptions): Router {
     validate(createSchema),
     asyncHandler(async (req, res) => {
       const row = await model.create({
-        ...apply(req.body),
+        ...(await apply(req.body)),
         createdAt: new Date(),
       })
       await audit(req, 'create', entity, row.get('id') as number, req.body)
@@ -61,7 +68,7 @@ export function crudRouter(opts: CrudOptions): Router {
     asyncHandler(async (req, res) => {
       const row = await model.findByPk(req.params.id)
       if (!row) throw new HttpError(404, `${entity} not found`)
-      await row.update(apply(req.body))
+      await row.update(await apply(req.body))
       await audit(req, 'update', entity, Number(req.params.id), req.body)
       res.json(row)
     })

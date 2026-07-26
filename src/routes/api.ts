@@ -3,11 +3,13 @@ import bcrypt from 'bcryptjs'
 import { authenticate } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
 import { crudRouter } from '../services/crud.js'
+import { HttpError } from '../utils/httpError.js'
 import * as schemas from '../validators/schemas.js'
 import {
   CustomerType,
   Customer,
   Category,
+  Carat,
   Product,
   Banner,
   StaticPage,
@@ -78,12 +80,33 @@ apiRouter.use(
 )
 
 apiRouter.use(
+  '/carats',
+  crudRouter({
+    model: Carat,
+    entity: 'Carat',
+    createSchema: schemas.caratCreate,
+    updateSchema: schemas.caratUpdate,
+  })
+)
+
+apiRouter.use(
   '/products',
   crudRouter({
     model: Product,
     entity: 'Product',
     createSchema: schemas.productCreate,
     updateSchema: schemas.productUpdate,
+    // Purity is now driven by the carat master. Mirror the selected carat's name
+    // into the legacy `purity` column so it never goes stale and older consumers
+    // (plus the NOT NULL constraint on existing databases) keep working. Done here
+    // rather than in the client so any API caller gets it right.
+    transform: async (body) => {
+      const { caratId } = body as { caratId?: number }
+      if (caratId == null) return body
+      const carat = await Carat.findByPk(caratId)
+      if (!carat) throw new HttpError(400, 'Selected carat no longer exists')
+      return { ...body, purity: carat.get('name') as string }
+    },
   })
 )
 

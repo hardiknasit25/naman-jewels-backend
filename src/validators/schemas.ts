@@ -87,6 +87,17 @@ export const categoryCreate = z.object({
 })
 export const categoryUpdate = categoryCreate.partial()
 
+// ----- Carats --------------------------------------------------------------
+// Master list of metal purities (24K, 22K, 916, …) products are tagged with.
+export const caratCreate = z.object({
+  name: z.string().min(1, 'Name is required'),
+  purity: z.string().optional(),
+  order: z.number().int().min(1, 'Order must be 1 or more'),
+  description: z.string().optional(),
+  active: z.boolean().optional(),
+})
+export const caratUpdate = caratCreate.partial()
+
 // ----- Products (3.5) ------------------------------------------------------
 export const productCreate = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -101,7 +112,11 @@ export const productCreate = z.object({
     .nullable()
     .optional(),
   size: z.string().optional(),
-  purity: z.string().min(1, 'Purity is required'),
+  // Carat master reference — the source of truth for purity.
+  caratId: z.number().int().positive('Carat is required'),
+  // Legacy free-text purity. Optional on the wire: the API derives it from the
+  // selected carat, so clients no longer need to send it.
+  purity: z.string().optional(),
   stoneDetails: z.string().optional(),
   notes: z.string().optional(),
   // Primary image — Base64 data URL or remote URL; empty string clears the image.

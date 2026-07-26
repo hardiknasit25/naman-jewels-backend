@@ -16,6 +16,11 @@ export const Product = sequelize.define('Product', {
   // rows explain what makes it up. Null/empty when no breakdown was entered.
   lessFactors: { type: DataTypes.JSON, allowNull: true },
   size: { type: DataTypes.STRING(120), allowNull: true },
+  // Carat master reference — the source of truth for the product's purity.
+  caratId: { type: DataTypes.INTEGER, allowNull: true },
+  // Legacy free-text purity ("22K Gold"). Superseded by caratId but still written:
+  // the API mirrors the selected carat's name into it on every create/update, so
+  // existing consumers (and the NOT NULL constraint on older databases) keep working.
   purity: { type: DataTypes.STRING(120), allowNull: false },
   stoneDetails: { type: DataTypes.STRING(500), allowNull: true },
   notes: { type: DataTypes.STRING(500), allowNull: true },
