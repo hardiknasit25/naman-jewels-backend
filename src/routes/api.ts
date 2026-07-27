@@ -17,6 +17,11 @@ import {
 } from '../models/index.js'
 import { login, logout, me, updateProfile, changePassword } from '../controllers/auth.controller.js'
 import { listSessions, listAudit } from '../controllers/logs.controller.js'
+import {
+  CATEGORY_ORDER,
+  appendCategoryToOrder,
+  reorderCategories,
+} from '../controllers/category.controller.js'
 import { customerRouter } from './customer.js'
 
 export const apiRouter = Router()
@@ -69,6 +74,14 @@ apiRouter.use(
   })
 )
 
+// Declared BEFORE the CRUD router below, whose `PATCH /:id` would otherwise
+// swallow "reorder" as an id.
+apiRouter.patch(
+  '/categories/reorder',
+  validate(schemas.categoryReorder),
+  reorderCategories
+)
+
 apiRouter.use(
   '/categories',
   crudRouter({
@@ -76,6 +89,9 @@ apiRouter.use(
     entity: 'Category',
     createSchema: schemas.categoryCreate,
     updateSchema: schemas.categoryUpdate,
+    // Categories are manually ordered by dragging rows in the admin grid.
+    order: CATEGORY_ORDER,
+    transform: appendCategoryToOrder,
   })
 )
 

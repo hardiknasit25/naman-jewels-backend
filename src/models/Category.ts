@@ -10,5 +10,8 @@ export const Category = sequelize.define('Category', {
   description: { type: DataTypes.STRING(500), allowNull: true },
   // Single category image (Base64 data URL or remote URL). LONGTEXT holds large images.
   imageUrl: { type: DataTypes.TEXT('long'), allowNull: true },
+  // Display position, set by dragging rows in the admin Categories grid. Lower
+  // shows first — in the admin grid, in the pickers, and in the customer app.
+  sortOrder: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   createdAt: createdAtColumn,
 }, { tableName: 'tbl_categories' })

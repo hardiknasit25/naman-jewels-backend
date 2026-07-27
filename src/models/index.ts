@@ -79,6 +79,12 @@ async function ensureColumns(): Promise<void> {
       afterAdd: backfillProductCarats,
     },
     { table: 'tbl_categories', column: 'imageUrl', spec: { type: DataTypes.TEXT('long'), allowNull: true } },
+    {
+      table: 'tbl_categories',
+      column: 'sortOrder',
+      spec: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+      afterAdd: backfillCategorySortOrder,
+    },
     { table: 'tbl_customers', column: 'passwordHash', spec: { type: DataTypes.STRING(200), allowNull: true } },
     { table: 'tbl_customers', column: 'sessionInvalidatedAt', spec: { type: DataTypes.DATE, allowNull: true } },
   ]
@@ -138,6 +144,21 @@ async function backfillProductCarats(): Promise<void> {
     })
   }
   console.log(`🔁 Seeded ${rows.length} carat(s) from existing product purity values`)
+}
+
+// Categories used to have no explicit order: the customer app listed them by
+// name and the admin grid by createdAt. On the single boot that adds
+// tbl_categories.sortOrder, seed it from the alphabetical order so the customer
+// app keeps showing exactly what it showed yesterday — the admin then changes it
+// by dragging rows. Only called from the afterAdd hook: re-running it would wipe
+// out an order the admin has since arranged by hand.
+async function backfillCategorySortOrder(): Promise<void> {
+  const rows = await Category.findAll({ order: [['name', 'ASC']] })
+  let position = 1
+  for (const row of rows) {
+    await row.update({ sortOrder: position++ })
+  }
+  console.log(`🔁 Seeded sortOrder for ${rows.length} categor(ies) from their names`)
 }
 
 async function backfillProductStatus(): Promise<void> {

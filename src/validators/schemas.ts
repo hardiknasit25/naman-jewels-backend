@@ -84,8 +84,16 @@ export const categoryCreate = z.object({
   description: z.string().optional(),
   // Base64 data URL or remote URL; empty string clears the image.
   imageUrl: z.string().optional(),
+  // Display position. Normally left out — the API appends new categories to the
+  // end and the admin reorders them by dragging rows (see categoryReorder).
+  sortOrder: z.number().int().min(0).optional(),
 })
 export const categoryUpdate = categoryCreate.partial()
+
+// Body of PATCH /categories/reorder: every category id in its new display order.
+export const categoryReorder = z.object({
+  ids: z.array(z.number().int()).min(1, 'At least one category id is required'),
+})
 
 // ----- Carats --------------------------------------------------------------
 // Master list of metal purities (24K, 22K, 916, …) products are tagged with.

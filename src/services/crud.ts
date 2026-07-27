@@ -1,5 +1,5 @@
 import express, { type Router } from 'express'
-import type { Model, ModelStatic } from 'sequelize'
+import type { Model, ModelStatic, Order } from 'sequelize'
 import type { ZodType } from 'zod'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { validate } from '../middleware/validate.js'
@@ -13,12 +13,20 @@ interface CrudOptions {
   createSchema: ZodType
   updateSchema: ZodType
   /**
+   * Sort applied to GET /. Defaults to newest first, which is what every grid
+   * expected before manually ordered entities (categories) came along.
+   */
+  order?: Order
+  /**
    * Optionally transform the validated body before create/update (e.g. stamp
    * updatedAt, hash a password). May be async when the transform needs to read
    * another table — e.g. products resolving the carat name into `purity`.
+   * `mode` lets a transform apply only on insert (e.g. appending a new row to
+   * the end of a manual sort order without touching it on later edits).
    */
   transform?: (
-    body: Record<string, unknown>
+    body: Record<string, unknown>,
+    mode: 'create' | 'update'
   ) => Record<string, unknown> | Promise<Record<string, unknown>>
 }
 
@@ -28,14 +36,15 @@ interface CrudOptions {
 // frontend repositories expect (full row on create/update, { id } on delete).
 export function crudRouter(opts: CrudOptions): Router {
   const { model, entity, createSchema, updateSchema, transform } = opts
+  const order: Order = opts.order ?? [['createdAt', 'DESC']]
   const router = express.Router()
-  const apply = async (body: Record<string, unknown>) =>
-    transform ? await transform(body) : body
+  const apply = async (body: Record<string, unknown>, mode: 'create' | 'update') =>
+    transform ? await transform(body, mode) : body
 
   router.get(
     '/',
     asyncHandler(async (_req, res) => {
-      const rows = await model.findAll({ order: [['createdAt', 'DESC']] })
+      const rows = await model.findAll({ order })
       res.json(rows)
     })
   )
@@ -54,7 +63,7 @@ export function crudRouter(opts: CrudOptions): Router {
     validate(createSchema),
     asyncHandler(async (req, res) => {
       const row = await model.create({
-        ...(await apply(req.body)),
+        ...(await apply(req.body, 'create')),
         createdAt: new Date(),
       })
       await audit(req, 'create', entity, row.get('id') as number, req.body)
@@ -68,7 +77,7 @@ export function crudRouter(opts: CrudOptions): Router {
     asyncHandler(async (req, res) => {
       const row = await model.findByPk(req.params.id)
       if (!row) throw new HttpError(404, `${entity} not found`)
-      await row.update(await apply(req.body))
+      await row.update(await apply(req.body, 'update'))
       await audit(req, 'update', entity, Number(req.params.id), req.body)
       res.json(row)
     })

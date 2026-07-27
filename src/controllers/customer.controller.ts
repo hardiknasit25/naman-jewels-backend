@@ -8,6 +8,7 @@ import { HttpError } from '../utils/httpError.js'
 import { newId } from '../utils/id.js'
 import { audit } from '../services/audit.js'
 import { CUSTOMER_AUDIENCE, statusMessage } from '../middleware/customerAuth.js'
+import { CATEGORY_ORDER } from './category.controller.js'
 import {
   isVisibleToTiers,
   visibleTypeIdsFor,
@@ -229,7 +230,8 @@ async function categoryTreeIds(id: number): Promise<number[]> {
 // filtering the full product array; over HTTP that was a request per category.
 export const listCategories = asyncHandler(async (req, res) => {
   const [categories, products] = await Promise.all([
-    Category.findAll({ order: [['name', 'ASC']] }),
+    // Same order as the admin grid: whatever the admin dragged the rows into.
+    Category.findAll({ order: CATEGORY_ORDER }),
     visibleProductsFor(req.customer!.customerTypeId),
   ])
 
