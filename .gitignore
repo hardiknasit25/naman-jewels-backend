@@ -2,3 +2,5 @@ node_modules
 dist
 *.log
 .env
+# Uploaded images — user data, not source. Back this folder up separately.
+uploads

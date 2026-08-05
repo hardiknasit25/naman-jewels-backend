@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import express, { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { authenticate } from '../middleware/auth.js'
 import { validate } from '../middleware/validate.js'
@@ -17,6 +17,7 @@ import {
 } from '../models/index.js'
 import { login, logout, me, updateProfile, changePassword } from '../controllers/auth.controller.js'
 import { listSessions, listAudit } from '../controllers/logs.controller.js'
+import { uploadImage } from '../controllers/upload.controller.js'
 import {
   CATEGORY_ORDER,
   appendCategoryToOrder,
@@ -40,6 +41,15 @@ apiRouter.use('/customer', customerRouter)
 
 // ----- Everything below requires a valid ADMIN JWT -------------------------
 apiRouter.use(authenticate)
+
+// ----- Media ---------------------------------------------------------------
+// Raw image bytes rather than JSON, so the limit here is a real file size — the
+// global express.json() limit doesn't apply to this route.
+apiRouter.post(
+  '/uploads',
+  express.raw({ type: ['image/webp', 'image/jpeg', 'image/png'], limit: '12mb' }),
+  uploadImage
+)
 
 apiRouter.post('/auth/logout', logout)
 apiRouter.get('/auth/me', me)

@@ -113,10 +113,17 @@ export const productCreate = z.object({
   categoryId: z.number().int().positive('Category is required'),
   grossWeight: z.number().positive('Enter a valid weight'),
   netWeight: z.number().nullable().optional(),
-  // Optional itemized breakdown of the less (deducted) weight — the admin can add
-  // any number of named factor rows. Display-only; does not affect Gross/Net.
+  // Itemized breakdown of the less (deducted) weight — any number of factor rows.
+  // The weight carries the row, so it must be a real positive number; the label is
+  // optional, since an unnamed deduction still counts. Display-only; the admin form
+  // is what enforces "at least one row".
   lessFactors: z
-    .array(z.object({ label: z.string().min(1), weight: z.number() }))
+    .array(
+      z.object({
+        label: z.string().optional().default(''),
+        weight: z.number().positive('Enter a valid factor weight'),
+      })
+    )
     .nullable()
     .optional(),
   size: z.string().optional(),

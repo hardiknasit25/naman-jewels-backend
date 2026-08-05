@@ -17,6 +17,11 @@ const EnvSchema = z.object({
     .enum(['2h', '4h', '12h', '1d', '1w', '1m'])
     .default('1d'),
 
+  // Where uploaded images are written, relative to the process working directory
+  // (or an absolute path). Deliberately outside `dist/`: a rebuild or a redeploy
+  // that replaces the compiled output must never touch uploaded files.
+  UPLOAD_DIR: z.string().default('uploads'),
+
   DB_HOST: z.string().default('127.0.0.1'),
   DB_PORT: z.coerce.number().default(3306),
   DB_NAME: z.string().min(1, 'DB_NAME is required'),
