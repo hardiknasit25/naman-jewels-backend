@@ -2,6 +2,7 @@ import express, { type Express } from 'express'
 import cors from 'cors'
 import compression from 'compression'
 import { apiRouter } from './routes/api.js'
+import { productSharePage } from './controllers/share.controller.js'
 import { errorHandler } from './middleware/error.js'
 import { UPLOAD_ROOT, UPLOAD_URL_PREFIX } from './services/uploads.js'
 import { env } from './config/env.js'
@@ -41,6 +42,12 @@ export function createApp(): Express {
       fallthrough: false,
     })
   )
+
+  // Public product share page. Outside /api on purpose: it's the link the app
+  // puts in a WhatsApp inquiry, so it has to stay short and readable in a chat
+  // ("/p/NJ-1042"), and it returns HTML for a preview crawler rather than JSON
+  // for a client.
+  app.get('/p/:sku', productSharePage)
 
   // All backend endpoints live under /api.
   app.use('/api', apiRouter)

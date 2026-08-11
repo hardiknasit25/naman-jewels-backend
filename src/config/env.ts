@@ -17,6 +17,13 @@ const EnvSchema = z.object({
     .enum(['2h', '4h', '12h', '1d', '1w', '1m'])
     .default('1d'),
 
+  // Public origin this API is reachable at, e.g. "https://naman.kriviinfo.com".
+  // Used only by the /p/:sku share page, to turn API-relative upload paths into
+  // the absolute og:image URL Open Graph requires. Optional: when unset the
+  // origin is derived from the request (see share.controller), which is correct
+  // as long as the proxy forwards Host and X-Forwarded-Proto.
+  PUBLIC_BASE_URL: z.string().optional(),
+
   // Where uploaded images are written, relative to the process working directory
   // (or an absolute path). Deliberately outside `dist/`: a rebuild or a redeploy
   // that replaces the compiled output must never touch uploaded files.
