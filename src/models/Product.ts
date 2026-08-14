@@ -6,7 +6,12 @@ import { idColumn, createdAtColumn } from './base.js'
 export const Product = sequelize.define('Product', {
   id: idColumn,
   name: { type: DataTypes.STRING(200), allowNull: false },
-  sku: { type: DataTypes.STRING(80), allowNull: false },
+  // The shop's own code for the piece, and the key the public share page
+  // (/p/:sku) resolves — so it has to identify exactly one product. `unique`
+  // only takes effect on a table this model creates; existing databases get the
+  // same index from ensureProductSkuUnique() in models/index.ts, and every write
+  // is checked at the API layer regardless (services/crud.ts).
+  sku: { type: DataTypes.STRING(80), allowNull: false, unique: true },
   categoryId: { type: DataTypes.INTEGER, allowNull: false },
   grossWeight: { type: DataTypes.FLOAT, allowNull: false },
   netWeight: { type: DataTypes.FLOAT, allowNull: true },

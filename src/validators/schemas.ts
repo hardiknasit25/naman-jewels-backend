@@ -109,7 +109,9 @@ export const caratUpdate = caratCreate.partial()
 // ----- Products (3.5) ------------------------------------------------------
 export const productCreate = z.object({
   name: z.string().min(1, 'Name is required'),
-  sku: z.string().min(1, 'SKU is required'),
+  // Trimmed before it reaches the uniqueness check, so " RG-1042" and "RG-1042"
+  // can't sit side by side as two "different" codes.
+  sku: z.string().trim().min(1, 'SKU is required'),
   categoryId: z.number().int().positive('Category is required'),
   grossWeight: z.number().positive('Enter a valid weight'),
   netWeight: z.number().nullable().optional(),

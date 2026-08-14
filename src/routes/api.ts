@@ -122,6 +122,10 @@ apiRouter.use(
     entity: 'Product',
     createSchema: schemas.productCreate,
     updateSchema: schemas.productUpdate,
+    // The SKU is the code the shop identifies a piece by, and the public share
+    // page (/p/:sku) looks products up by it — two products sharing a code would
+    // make that link resolve to whichever row the database returned first.
+    unique: { field: 'sku', label: 'Product Code / SKU' },
     // Purity is now driven by the carat master. Mirror the selected carat's name
     // into the legacy `purity` column so it never goes stale and older consumers
     // (plus the NOT NULL constraint on existing databases) keep working. Done here

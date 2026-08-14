@@ -12,6 +12,23 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
       ...(err.code ? { code: err.code } : {}),
     })
   }
+  // A unique index rejected the write (e.g. two requests claiming the same
+  // product SKU at the same instant, which slips past the read-then-write check
+  // in services/crud.ts). That's a client-fixable conflict, not a server fault.
+  if ((err as { name?: string } | null)?.name === 'SequelizeUniqueConstraintError') {
+    const fields = (err as { errors?: { path?: string; value?: unknown }[] }).errors ?? []
+    const detail = fields
+      .map((f) => (f.value != null ? `${f.path} "${String(f.value)}"` : f.path))
+      .filter(Boolean)
+      .join(', ')
+    return res.status(409).json({
+      message: detail
+        ? `Another record already uses ${detail}. Enter a unique value.`
+        : 'Another record with these details already exists.',
+      code: 'duplicate',
+    })
+  }
+
   // Express middleware sets a numeric `status`/`statusCode` on its own errors —
   // a missing file from express.static (404) or an over-sized body from the JSON
   // and raw body parsers (413). Without this they'd all be reported as 500s and

@@ -1,5 +1,5 @@
 import express, { type Router } from 'express'
-import type { Model, ModelStatic, Order } from 'sequelize'
+import { Op, type Model, type ModelStatic, type Order, type WhereOptions } from 'sequelize'
 import type { ZodType } from 'zod'
 import { asyncHandler } from '../utils/asyncHandler.js'
 import { validate } from '../middleware/validate.js'
@@ -28,6 +28,16 @@ interface CrudOptions {
     body: Record<string, unknown>,
     mode: 'create' | 'update'
   ) => Record<string, unknown> | Promise<Record<string, unknown>>
+  /**
+   * A column whose value must not repeat across rows (e.g. a product's SKU).
+   * Checked on create, and on update against every row except the one being
+   * edited, so re-saving a record with its own value is always allowed. A clash
+   * is a 409 carrying `code: 'duplicate'` and a message naming `label`.
+   *
+   * A PATCH that doesn't carry the field is left alone — partial updates that
+   * touch other columns must keep working.
+   */
+  unique?: { field: string; label: string }
 }
 
 // Builds a standard REST router for one entity:
@@ -35,11 +45,33 @@ interface CrudOptions {
 // Every mutation writes an audit log entry. Responses mirror the shape the
 // frontend repositories expect (full row on create/update, { id } on delete).
 export function crudRouter(opts: CrudOptions): Router {
-  const { model, entity, createSchema, updateSchema, transform } = opts
+  const { model, entity, createSchema, updateSchema, transform, unique } = opts
   const order: Order = opts.order ?? [['createdAt', 'DESC']]
   const router = express.Router()
   const apply = async (body: Record<string, unknown>, mode: 'create' | 'update') =>
     transform ? await transform(body, mode) : body
+
+  // Rejects a write whose `unique` column value is already taken. `excludeId` is
+  // the row being edited (absent on create), which must not count as a clash
+  // against itself. Runs before the insert/update so nothing is written on 409.
+  const ensureUnique = async (body: Record<string, unknown>, excludeId?: number) => {
+    if (!unique) return
+    const value = body[unique.field]
+    // Field not part of this (partial) update — nothing to check.
+    if (value === undefined || value === null || value === '') return
+
+    const where = { [unique.field]: value } as Record<string, unknown>
+    if (excludeId != null) where.id = { [Op.ne]: excludeId }
+
+    const clash = await model.findOne({ where: where as WhereOptions })
+    if (clash) {
+      throw new HttpError(
+        409,
+        `${unique.label} "${String(value)}" is already used by another ${entity.toLowerCase()}. Enter a unique ${unique.label}.`,
+        'duplicate'
+      )
+    }
+  }
 
   router.get(
     '/',
@@ -62,6 +94,7 @@ export function crudRouter(opts: CrudOptions): Router {
     '/',
     validate(createSchema),
     asyncHandler(async (req, res) => {
+      await ensureUnique(req.body)
       const row = await model.create({
         ...(await apply(req.body, 'create')),
         createdAt: new Date(),
@@ -77,6 +110,7 @@ export function crudRouter(opts: CrudOptions): Router {
     asyncHandler(async (req, res) => {
       const row = await model.findByPk(req.params.id)
       if (!row) throw new HttpError(404, `${entity} not found`)
+      await ensureUnique(req.body, Number(req.params.id))
       await row.update(await apply(req.body, 'update'))
       await audit(req, 'update', entity, Number(req.params.id), req.body)
       res.json(row)

@@ -47,7 +47,57 @@ export async function initModels(): Promise<void> {
   await sequelize.authenticate()
   await sequelize.sync()
   await ensureColumns()
+  await ensureProductSkuUnique()
   initialized = true
+}
+
+// A product's SKU has to identify exactly one product (the /p/:sku share page
+// resolves by it). Every write goes through the API's uniqueness check, but a
+// database-level index is what makes it true under concurrent requests and for
+// anything written outside the API.
+//
+// sequelize.sync() (no { alter }) only applies the model's `unique` flag to a
+// table it creates, so existing databases are handled here. Deliberately
+// conservative: if the table already holds duplicate SKUs, adding the index
+// would fail — that's reported and skipped rather than allowed to block startup,
+// and the API-level check still prevents new duplicates in the meantime.
+async function ensureProductSkuUnique(): Promise<void> {
+  const qi = sequelize.getQueryInterface()
+  try {
+    const indexes = (await qi.showIndex('tbl_products')) as {
+      unique?: boolean
+      fields?: { attribute: string }[]
+    }[]
+    const alreadyIndexed = indexes.some(
+      (i) => i.unique && i.fields?.length === 1 && i.fields[0]?.attribute === 'sku'
+    )
+    if (alreadyIndexed) return
+
+    const duplicates = (await sequelize.query(
+      'SELECT sku, COUNT(*) AS total FROM tbl_products GROUP BY sku HAVING total > 1',
+      { type: QueryTypes.SELECT }
+    )) as { sku: string; total: number }[]
+
+    if (duplicates.length > 0) {
+      console.warn(
+        `⚠️  Not adding the unique index on tbl_products.sku — ${duplicates.length} code(s) are used by more than one product: ` +
+          `${duplicates.map((d) => `${d.sku} (×${d.total})`).join(', ')}. ` +
+          'Give those products distinct codes and restart to have the index applied.'
+      )
+      return
+    }
+
+    await qi.addIndex('tbl_products', {
+      fields: ['sku'],
+      unique: true,
+      name: 'tbl_products_sku_unique',
+    })
+    console.log('🧩 Added unique index on tbl_products.sku')
+  } catch (err) {
+    // Never fatal: the API-level check is the one users hit, and a host that
+    // forbids DDL shouldn't stop the server from booting.
+    console.warn('⚠️  Could not ensure the unique index on tbl_products.sku:', err)
+  }
 }
 
 // sequelize.sync() (without { alter }) creates missing tables but never adds new
