@@ -57,8 +57,8 @@ function publicCustomer(row: InstanceType<typeof Customer>) {
 // 'pending' with no tier; an admin approves and assigns the tier later.
 export const register = asyncHandler(async (req, res) => {
   const body = req.body as {
-    companyName: string; mobileNumber: string; email: string
-    password: string; address: string; city: string; referenceBy?: string
+    companyName: string; mobileNumber: string
+    password: string; city: string
   }
 
   // Mobile is the login identifier, so it must be unique. Compare on digits so
@@ -72,11 +72,11 @@ export const register = asyncHandler(async (req, res) => {
   const created = await Customer.create({
     companyName: body.companyName,
     mobileNumber: body.mobileNumber,
-    email: body.email,
+    email: null,
     passwordHash: bcrypt.hashSync(body.password, 10),
-    address: body.address,
+    address: null,
     city: body.city,
-    referenceBy: body.referenceBy ?? null,
+    referenceBy: null,
     customerTypeId: null,
     status: 'pending',
     sessionDuration: '1d',
@@ -84,8 +84,8 @@ export const register = asyncHandler(async (req, res) => {
   })
 
   await audit(req, 'create', 'Customer', created.get('id') as number,
-    { companyName: body.companyName, mobileNumber: body.mobileNumber, email: body.email, status: 'pending' },
-    { id: created.get('id') as number, email: body.email })
+    { companyName: body.companyName, mobileNumber: body.mobileNumber, status: 'pending' },
+    { id: created.get('id') as number })
 
   // 201 with the pending record — the app shows a "waiting for approval" screen.
   res.status(201).json({ customer: publicCustomer(created) })
@@ -116,18 +116,39 @@ export const login = asyncHandler(async (req, res) => {
     throw new HttpError(403, statusMessage(status), status)
   }
 
-  const sessionDuration = (customer.get('sessionDuration') as string) ?? '1d'
   const id = customer.get('id') as number
+
+  // Single-device login: refuse a second login while another device still holds
+  // a live (not logged-out, not expired) session for this customer.
+  const activeSessionExpiresAt = customer.get('activeSessionExpiresAt') as Date | string | null
+  if (activeSessionExpiresAt && new Date(activeSessionExpiresAt).getTime() > Date.now()) {
+    throw new HttpError(
+      409,
+      'This account is already logged in on another device. Please logout from that device first.',
+      'device_conflict'
+    )
+  }
+
+  const sessionDuration = (customer.get('sessionDuration') as string) ?? '1d'
   const email = customer.get('email') as string
 
-  const token = jwt.sign({ sub: id, email, jti: newId('cjti') }, env.JWT_SECRET, {
+  const jti = newId('cjti')
+  const token = jwt.sign({ sub: id, email, jti }, env.JWT_SECRET, {
     expiresIn: (DURATION_TO_JWT[sessionDuration] ?? '1d') as jwt.SignOptions['expiresIn'],
     audience: CUSTOMER_AUDIENCE,
   })
+  const decoded = jwt.decode(token) as { exp: number }
 
   // Clear any force-logout stamp: this new token is issued now, so the session is
   // valid again. Without this a same-second re-login could still look invalidated.
-  await customer.update({ lastLogin: new Date(), sessionInvalidatedAt: null })
+  // currentJti + activeSessionExpiresAt mark this device's session as the sole
+  // active one, so a login from elsewhere is refused above until this one ends.
+  await customer.update({
+    lastLogin: new Date(),
+    sessionInvalidatedAt: null,
+    currentJti: jti,
+    activeSessionExpiresAt: new Date(decoded.exp * 1000),
+  })
   await audit(req, 'login', 'Customer', id, null, { id, email })
 
   res.json({ token, customer: publicCustomer(customer) })
@@ -142,10 +163,15 @@ export const me = asyncHandler(async (req, res) => {
 })
 
 // POST /api/customer/auth/logout — customer sessions aren't tracked in
-// SessionLog (that table is admin-scoped), so this only records the audit entry;
-// the client discards its token.
+// SessionLog (that table is admin-scoped). Clears the single-device lock so
+// another device can log in immediately, then records the audit entry; the
+// client discards its token.
 export const logout = asyncHandler(async (req, res) => {
   const { id, email } = req.customer!
+  await Customer.update(
+    { currentJti: null, activeSessionExpiresAt: null },
+    { where: { id } }
+  )
   await audit(req, 'logout', 'Customer', id, null, { id, email })
   res.json({ success: true })
 })

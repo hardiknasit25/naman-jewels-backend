@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import { Op } from 'sequelize'
 import { env } from '../config/env.js'
 import { Admin, SessionLog } from '../models/index.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
@@ -27,10 +28,24 @@ export const login = asyncHandler(async (req, res) => {
   const valid = admin && bcrypt.compareSync(password, admin.get('passwordHash') as string)
   if (!admin || !valid) throw new HttpError(401, 'Invalid email or password')
 
+  const adminId = admin.get('id') as number
+
+  // Single-device login: refuse a second login while another device still holds
+  // a live (not logged-out, not expired) session for this admin.
+  const activeElsewhere = await SessionLog.findOne({
+    where: { adminId, active: true, expiresAt: { [Op.gt]: new Date() } },
+  })
+  if (activeElsewhere) {
+    throw new HttpError(
+      409,
+      'This account is already logged in on another device. Please logout from that device first.',
+      'device_conflict'
+    )
+  }
+
   const sessionDuration = admin.get('sessionDuration') as string
   const expiresIn = DURATION_TO_JWT[sessionDuration] ?? '1d'
   const jti = newId('jti')
-  const adminId = admin.get('id') as number
   const adminEmail = admin.get('email') as string
 
   const token = jwt.sign({ sub: adminId, email: adminEmail, jti }, env.JWT_SECRET, {

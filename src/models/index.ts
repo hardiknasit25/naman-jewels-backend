@@ -47,8 +47,28 @@ export async function initModels(): Promise<void> {
   await sequelize.authenticate()
   await sequelize.sync()
   await ensureColumns()
+  await ensureCustomerColumnsNullable()
   await ensureProductSkuUnique()
   initialized = true
+}
+
+// email/address used to be required at registration; they no longer are (see
+// Customer.ts). sequelize.sync() never loosens an existing column's NOT NULL
+// constraint on its own, so without this an older database would still reject
+// a registration or admin-add that omits them. Safe to re-run every boot —
+// it only widens the constraint, never narrows it or touches data.
+async function ensureCustomerColumnsNullable(): Promise<void> {
+  const qi = sequelize.getQueryInterface()
+  for (const { column, type } of [
+    { column: 'email', type: DataTypes.STRING(180) },
+    { column: 'address', type: DataTypes.STRING(500) },
+  ] as const) {
+    try {
+      await qi.changeColumn('tbl_customers', column, { type, allowNull: true })
+    } catch (err) {
+      console.warn(`⚠️  Could not relax tbl_customers.${column} to nullable:`, err)
+    }
+  }
 }
 
 // A product's SKU has to identify exactly one product (the /p/:sku share page
@@ -137,6 +157,8 @@ async function ensureColumns(): Promise<void> {
     },
     { table: 'tbl_customers', column: 'passwordHash', spec: { type: DataTypes.STRING(200), allowNull: true } },
     { table: 'tbl_customers', column: 'sessionInvalidatedAt', spec: { type: DataTypes.DATE, allowNull: true } },
+    { table: 'tbl_customers', column: 'currentJti', spec: { type: DataTypes.STRING(64), allowNull: true } },
+    { table: 'tbl_customers', column: 'activeSessionExpiresAt', spec: { type: DataTypes.DATE, allowNull: true } },
   ]
 
   for (const { table, column, spec, afterAdd } of additions) {

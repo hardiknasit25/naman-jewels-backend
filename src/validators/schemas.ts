@@ -31,15 +31,13 @@ export const customerLogin = z.object({
 
 // Self-registration from the app. The customer never chooses their own tier or
 // status — both are assigned by an admin on approval, so those keys are absent
-// here on purpose (Zod strips them if a client sends them anyway).
+// here on purpose (Zod strips them if a client sends them anyway). Email,
+// address and reference-by are no longer collected at registration.
 export const customerRegister = z.object({
   companyName: z.string().min(1, 'Company name is required'),
   mobileNumber: z.string().min(7, 'Enter a valid mobile number'),
-  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  address: z.string().min(1, 'Address is required'),
   city: z.string().min(1, 'City is required'),
-  referenceBy: z.string().optional(),
 })
 
 // An inquiry raised from the app. customerId is taken from the JWT, never the
@@ -59,15 +57,14 @@ export const customerTypeCreate = z.object({
 export const customerTypeUpdate = customerTypeCreate.partial()
 
 // ----- Customers (4.4) -----------------------------------------------------
+// Email, address and reference-by are no longer collected here either — kept
+// out so admin-created/updated records stay consistent with self-registration.
 export const customerCreate = z.object({
   companyName: z.string().min(1, 'Company name is required'),
   mobileNumber: z.string().min(1, 'Mobile number is required'),
-  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
   // Set during self-registration; optional for admin-created records.
   password: z.string().min(6, 'Password must be at least 6 characters').optional(),
-  address: z.string().min(1, 'Address is required'),
   city: z.string().min(1, 'City is required'),
-  referenceBy: z.string().optional(),
   customerTypeId: z.number().int().nullable().optional(),
   status: z.enum(['pending', 'active', 'blocked', 'rejected']).optional(),
   lastLogin: z.string().nullable().optional(),
