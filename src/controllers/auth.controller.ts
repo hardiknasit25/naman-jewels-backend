@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { Op } from 'sequelize'
 import { env } from '../config/env.js'
 import { Admin, SessionLog } from '../models/index.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
@@ -30,18 +29,8 @@ export const login = asyncHandler(async (req, res) => {
 
   const adminId = admin.get('id') as number
 
-  // Single-device login: refuse a second login while another device still holds
-  // a live (not logged-out, not expired) session for this admin.
-  const activeElsewhere = await SessionLog.findOne({
-    where: { adminId, active: true, expiresAt: { [Op.gt]: new Date() } },
-  })
-  if (activeElsewhere) {
-    throw new HttpError(
-      409,
-      'This account is already logged in on another device. Please logout from that device first.',
-      'device_conflict'
-    )
-  }
+  // Admin panel allows concurrent logins from multiple devices — unlike the
+  // customer app, there's no single-device restriction here.
 
   const sessionDuration = admin.get('sessionDuration') as string
   const expiresIn = DURATION_TO_JWT[sessionDuration] ?? '1d'
