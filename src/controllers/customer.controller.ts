@@ -94,7 +94,11 @@ export const register = asyncHandler(async (req, res) => {
 // POST /api/customer/auth/login — mobile + password. Issues a customer-audience
 // JWT whose expiry is the customer's own sessionDuration.
 export const login = asyncHandler(async (req, res) => {
-  const { mobileNumber, password } = req.body as { mobileNumber: string; password: string }
+  const { mobileNumber, password, deviceId } = req.body as {
+    mobileNumber: string
+    password: string
+    deviceId?: string
+  }
 
   const all = await Customer.findAll()
   const target = digits(mobileNumber)
@@ -118,10 +122,16 @@ export const login = asyncHandler(async (req, res) => {
 
   const id = customer.get('id') as number
 
-  // Single-device login: refuse a second login while another device still holds
-  // a live (not logged-out, not expired) session for this customer.
+  // Single-device login: refuse a login while ANOTHER device still holds a live
+  // (not logged-out, not expired) session for this customer. The same device
+  // signing in again is allowed — otherwise a logout call that failed to reach
+  // the server would lock the customer out of their own phone until expiry.
   const activeSessionExpiresAt = customer.get('activeSessionExpiresAt') as Date | string | null
-  if (activeSessionExpiresAt && new Date(activeSessionExpiresAt).getTime() > Date.now()) {
+  const activeDeviceId = customer.get('activeDeviceId') as string | null
+  const sessionLive =
+    !!activeSessionExpiresAt && new Date(activeSessionExpiresAt).getTime() > Date.now()
+  const sameDevice = !!deviceId && !!activeDeviceId && deviceId === activeDeviceId
+  if (sessionLive && !sameDevice) {
     throw new HttpError(
       409,
       'This account is already logged in on another device. Please logout from that device first.',
@@ -148,6 +158,7 @@ export const login = asyncHandler(async (req, res) => {
     sessionInvalidatedAt: null,
     currentJti: jti,
     activeSessionExpiresAt: new Date(decoded.exp * 1000),
+    activeDeviceId: deviceId ?? null,
   })
   await audit(req, 'login', 'Customer', id, null, { id, email })
 
@@ -169,7 +180,7 @@ export const me = asyncHandler(async (req, res) => {
 export const logout = asyncHandler(async (req, res) => {
   const { id, email } = req.customer!
   await Customer.update(
-    { currentJti: null, activeSessionExpiresAt: null },
+    { currentJti: null, activeSessionExpiresAt: null, activeDeviceId: null },
     { where: { id } }
   )
   await audit(req, 'logout', 'Customer', id, null, { id, email })

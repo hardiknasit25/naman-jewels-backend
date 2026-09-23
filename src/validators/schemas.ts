@@ -27,6 +27,8 @@ export const changePassword = z.object({
 export const customerLogin = z.object({
   mobileNumber: z.string().min(1, 'Mobile number is required'),
   password: z.string().min(1, 'Password is required'),
+  // Stable per-install id from the app; lets the same device sign in again.
+  deviceId: z.string().max(64).optional(),
 })
 
 // Self-registration from the app. The customer never chooses their own tier or

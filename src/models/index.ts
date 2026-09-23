@@ -159,6 +159,7 @@ async function ensureColumns(): Promise<void> {
     { table: 'tbl_customers', column: 'sessionInvalidatedAt', spec: { type: DataTypes.DATE, allowNull: true } },
     { table: 'tbl_customers', column: 'currentJti', spec: { type: DataTypes.STRING(64), allowNull: true } },
     { table: 'tbl_customers', column: 'activeSessionExpiresAt', spec: { type: DataTypes.DATE, allowNull: true } },
+    { table: 'tbl_customers', column: 'activeDeviceId', spec: { type: DataTypes.STRING(64), allowNull: true } },
   ]
 
   for (const { table, column, spec, afterAdd } of additions) {

@@ -33,6 +33,10 @@ export const Customer = sequelize.define('Customer', {
   // out (both clear it), forcing the account to log out elsewhere first.
   currentJti: { type: DataTypes.STRING(64), allowNull: true },
   activeSessionExpiresAt: { type: DataTypes.DATE, allowNull: true },
+  // Install id of the device holding the live session. A login from the SAME
+  // device is always allowed (e.g. its logout call never reached the server);
+  // only a different device is refused while the session is live.
+  activeDeviceId: { type: DataTypes.STRING(64), allowNull: true },
   // Per-customer session length (drives JWT expiry for the customer app).
   sessionDuration: {
     type: DataTypes.ENUM(...SESSION_DURATIONS),

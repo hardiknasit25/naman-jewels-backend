@@ -74,12 +74,18 @@ apiRouter.use(
     createSchema: schemas.customerCreate,
     updateSchema: schemas.customerUpdate,
     // Hash the plaintext password into passwordHash; never persist it raw.
+    // A force-logout (sessionInvalidatedAt set) also releases the single-device
+    // lock, so the customer can sign in again right away on any device.
     transform: (body) => {
-      const { password, ...rest } = body as { password?: string }
-      if (typeof password === 'string' && password.length > 0) {
-        return { ...rest, passwordHash: bcrypt.hashSync(password, 10) }
+      const { password, ...rest } = body as { password?: string; sessionInvalidatedAt?: string | null }
+      const out: Record<string, unknown> = { ...rest }
+      if (rest.sessionInvalidatedAt) {
+        Object.assign(out, { currentJti: null, activeSessionExpiresAt: null, activeDeviceId: null })
       }
-      return rest
+      if (typeof password === 'string' && password.length > 0) {
+        out.passwordHash = bcrypt.hashSync(password, 10)
+      }
+      return out
     },
   })
 )
