@@ -11,6 +11,7 @@ import { StaticPage } from './StaticPage.js'
 import { Inquiry } from './Inquiry.js'
 import { SessionLog } from './SessionLog.js'
 import { AuditLog } from './AuditLog.js'
+import { SESSION_DURATIONS } from './base.js'
 
 export {
   sequelize,
@@ -48,6 +49,8 @@ export async function initModels(): Promise<void> {
   await sequelize.sync()
   await ensureColumns()
   await ensureCustomerColumnsNullable()
+  await ensureSessionDurationValues()
+  await ensureProductWeightPrecision()
   await ensureProductSkuUnique()
   initialized = true
 }
@@ -67,6 +70,56 @@ async function ensureCustomerColumnsNullable(): Promise<void> {
       await qi.changeColumn('tbl_customers', column, { type, allowNull: true })
     } catch (err) {
       console.warn(`⚠️  Could not relax tbl_customers.${column} to nullable:`, err)
+    }
+  }
+}
+
+// sessionDuration is a MySQL ENUM, and sequelize.sync() never widens an existing
+// ENUM — so on an older database the newer presets (6 Months, 1 Year) would be
+// rejected on save. Widen both tables' columns to the full SESSION_DURATIONS
+// list. Only adds values, so every stored duration stays valid; skipped once
+// the column already allows them, so it's safe to run every boot.
+async function ensureSessionDurationValues(): Promise<void> {
+  const qi = sequelize.getQueryInterface()
+  for (const table of ['tbl_users', 'tbl_customers']) {
+    try {
+      const column = (await qi.describeTable(table)).sessionDuration
+      if (!column) continue
+      const type = String(column.type)
+      if (SESSION_DURATIONS.every((d) => type.includes(`'${d}'`))) continue
+      await qi.changeColumn(table, 'sessionDuration', {
+        type: DataTypes.ENUM(...SESSION_DURATIONS),
+        allowNull: false,
+        defaultValue: '1d',
+      })
+      console.log(`🧩 Widened ${table}.sessionDuration to ${SESSION_DURATIONS.join(', ')}`)
+    } catch (err) {
+      console.warn(`⚠️  Could not widen ${table}.sessionDuration:`, err)
+    }
+  }
+}
+
+// Product weights are entered to the milligram (3 decimals). They used to be
+// stored as single-precision FLOAT, which only holds ~7 significant digits and
+// stores values like 12.345 as 12.3450002670… Move them to DOUBLE and round the
+// carried-over values back to 3 decimals so they read exactly as entered. Only
+// runs while a column is still FLOAT, so the rounding happens exactly once.
+async function ensureProductWeightPrecision(): Promise<void> {
+  const qi = sequelize.getQueryInterface()
+  for (const { column, allowNull } of [
+    { column: 'grossWeight', allowNull: false },
+    { column: 'netWeight', allowNull: true },
+  ]) {
+    try {
+      const existing = (await qi.describeTable('tbl_products'))[column]
+      if (!existing || !String(existing.type).toUpperCase().startsWith('FLOAT')) continue
+      await qi.changeColumn('tbl_products', column, { type: DataTypes.DOUBLE, allowNull })
+      await sequelize.query(
+        `UPDATE tbl_products SET \`${column}\` = ROUND(\`${column}\`, 3) WHERE \`${column}\` IS NOT NULL`
+      )
+      console.log(`🧩 Converted tbl_products.${column} to DOUBLE (3-decimal weights)`)
+    } catch (err) {
+      console.warn(`⚠️  Could not convert tbl_products.${column} to DOUBLE:`, err)
     }
   }
 }

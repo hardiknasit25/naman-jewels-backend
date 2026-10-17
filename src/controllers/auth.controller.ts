@@ -16,6 +16,8 @@ const DURATION_TO_JWT: Record<string, string> = {
   '1d': '1d',
   '1w': '7d',
   '1m': '30d',
+  '6m': '180d',
+  '1y': '365d',
 }
 
 // POST /api/auth/login — verify credentials, issue a JWT whose expiry equals the

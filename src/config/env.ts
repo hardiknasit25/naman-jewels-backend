@@ -14,7 +14,7 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
   // Default session length for the seeded admin (per-user, drives JWT expiry).
   ADMIN_SESSION_DURATION: z
-    .enum(['2h', '4h', '12h', '1d', '1w', '1m'])
+    .enum(['2h', '4h', '12h', '1d', '1w', '1m', '6m', '1y'])
     .default('1d'),
 
   // Public origin this API is reachable at, e.g. "https://naman.kriviinfo.com".

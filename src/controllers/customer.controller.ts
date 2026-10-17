@@ -28,6 +28,7 @@ import {
 
 const DURATION_TO_JWT: Record<string, string> = {
   '2h': '2h', '4h': '4h', '12h': '12h', '1d': '1d', '1w': '7d', '1m': '30d',
+  '6m': '180d', '1y': '365d',
 }
 
 /** Mobile numbers are typed with spaces/dashes/+; compare on digits only. */

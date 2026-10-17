@@ -15,4 +15,4 @@ export const createdAtColumn = {
 }
 
 // Preset session durations shared by Admin (and Customer) — drives JWT expiry.
-export const SESSION_DURATIONS = ['2h', '4h', '12h', '1d', '1w', '1m'] as const
+export const SESSION_DURATIONS = ['2h', '4h', '12h', '1d', '1w', '1m', '6m', '1y'] as const

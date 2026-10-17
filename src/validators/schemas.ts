@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const SESSION_DURATION = z.enum(['2h', '4h', '12h', '1d', '1w', '1m'])
+const SESSION_DURATION = z.enum(['2h', '4h', '12h', '1d', '1w', '1m', '6m', '1y'])
 
 // ----- Auth ----------------------------------------------------------------
 export const loginSchema = z.object({

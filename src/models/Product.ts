@@ -13,8 +13,8 @@ export const Product = sequelize.define('Product', {
   // is checked at the API layer regardless (services/crud.ts).
   sku: { type: DataTypes.STRING(80), allowNull: false, unique: true },
   categoryId: { type: DataTypes.INTEGER, allowNull: false },
-  grossWeight: { type: DataTypes.FLOAT, allowNull: false },
-  netWeight: { type: DataTypes.FLOAT, allowNull: true },
+  grossWeight: { type: DataTypes.DOUBLE, allowNull: false },
+  netWeight: { type: DataTypes.DOUBLE, allowNull: true },
   // Optional itemized breakdown of the "less" (deducted) weight, as a JSON array
   // of { label, weight } rows the admin can add freely (Stone, Kundan, Meena, …).
   // Display-only: the total less weight shown in the app is Gross − Net; these
