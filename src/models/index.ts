@@ -87,12 +87,20 @@ async function ensureSessionDurationValues(): Promise<void> {
       if (!column) continue
       const type = String(column.type)
       if (SESSION_DURATIONS.every((d) => type.includes(`'${d}'`))) continue
+      const isCustomers = table === 'tbl_customers'
       await qi.changeColumn(table, 'sessionDuration', {
         type: DataTypes.ENUM(...SESSION_DURATIONS),
         allowNull: false,
-        defaultValue: '1d',
+        defaultValue: isCustomers ? 'never' : '1d',
       })
       console.log(`🧩 Widened ${table}.sessionDuration to ${SESSION_DURATIONS.join(', ')}`)
+      // The boot that first adds 'never' moves every existing customer onto it, so
+      // nobody is asked to sign in again. It runs only that once (the column then
+      // already allows 'never'), so later per-customer choices are left alone.
+      if (isCustomers && !type.includes("'never'")) {
+        await sequelize.query("UPDATE tbl_customers SET sessionDuration = 'never'")
+        console.log('🧩 Moved every customer to a never-expiring session')
+      }
     } catch (err) {
       console.warn(`⚠️  Could not widen ${table}.sessionDuration:`, err)
     }

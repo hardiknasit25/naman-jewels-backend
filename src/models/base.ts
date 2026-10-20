@@ -15,4 +15,6 @@ export const createdAtColumn = {
 }
 
 // Preset session durations shared by Admin (and Customer) — drives JWT expiry.
-export const SESSION_DURATIONS = ['2h', '4h', '12h', '1d', '1w', '1m', '6m', '1y'] as const
+// 'never' keeps the user signed in for good (a 100-year token); blocking still
+// takes effect at once, since every request re-checks the account status.
+export const SESSION_DURATIONS = ['2h', '4h', '12h', '1d', '1w', '1m', '6m', '1y', 'never'] as const

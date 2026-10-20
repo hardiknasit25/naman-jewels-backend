@@ -28,7 +28,35 @@ import {
 
 const DURATION_TO_JWT: Record<string, string> = {
   '2h': '2h', '4h': '4h', '12h': '12h', '1d': '1d', '1w': '7d', '1m': '30d',
-  '6m': '180d', '1y': '365d',
+  '6m': '180d', '1y': '365d', never: '36500d',
+}
+
+/**
+ * Sign a customer token for their current sessionDuration and record it as the
+ * account's live session (the single-device lock reads these fields).
+ */
+async function issueCustomerToken(customer: InstanceType<typeof Customer>, deviceId: string | null) {
+  const id = customer.get('id') as number
+  const email = customer.get('email') as string
+  const sessionDuration = (customer.get('sessionDuration') as string) ?? 'never'
+  const jti = newId('cjti')
+  const token = jwt.sign({ sub: id, email, jti }, env.JWT_SECRET, {
+    expiresIn: (DURATION_TO_JWT[sessionDuration] ?? '1d') as jwt.SignOptions['expiresIn'],
+    audience: CUSTOMER_AUDIENCE,
+  })
+  const decoded = jwt.decode(token) as { exp: number }
+
+  // Clear any force-logout stamp: this new token is issued now, so the session is
+  // valid again. Without this a same-second re-login could still look invalidated.
+  // currentJti + activeSessionExpiresAt mark this device's session as the sole
+  // active one, so a login from elsewhere is refused until this one ends.
+  await customer.update({
+    sessionInvalidatedAt: null,
+    currentJti: jti,
+    activeSessionExpiresAt: new Date(decoded.exp * 1000),
+    activeDeviceId: deviceId,
+  })
+  return token
 }
 
 /** Mobile numbers are typed with spaces/dashes/+; compare on digits only. */
@@ -80,7 +108,8 @@ export const register = asyncHandler(async (req, res) => {
     referenceBy: null,
     customerTypeId: null,
     status: 'pending',
-    sessionDuration: '1d',
+    // Signed in for good once they log in; tier and blocking still apply live.
+    sessionDuration: 'never',
     createdAt: new Date(),
   })
 
@@ -140,27 +169,9 @@ export const login = asyncHandler(async (req, res) => {
     )
   }
 
-  const sessionDuration = (customer.get('sessionDuration') as string) ?? '1d'
   const email = customer.get('email') as string
-
-  const jti = newId('cjti')
-  const token = jwt.sign({ sub: id, email, jti }, env.JWT_SECRET, {
-    expiresIn: (DURATION_TO_JWT[sessionDuration] ?? '1d') as jwt.SignOptions['expiresIn'],
-    audience: CUSTOMER_AUDIENCE,
-  })
-  const decoded = jwt.decode(token) as { exp: number }
-
-  // Clear any force-logout stamp: this new token is issued now, so the session is
-  // valid again. Without this a same-second re-login could still look invalidated.
-  // currentJti + activeSessionExpiresAt mark this device's session as the sole
-  // active one, so a login from elsewhere is refused above until this one ends.
-  await customer.update({
-    lastLogin: new Date(),
-    sessionInvalidatedAt: null,
-    currentJti: jti,
-    activeSessionExpiresAt: new Date(decoded.exp * 1000),
-    activeDeviceId: deviceId ?? null,
-  })
+  await customer.update({ lastLogin: new Date() })
+  const token = await issueCustomerToken(customer, deviceId ?? null)
   await audit(req, 'login', 'Customer', id, null, { id, email })
 
   res.json({ token, customer: publicCustomer(customer) })
@@ -168,10 +179,23 @@ export const login = asyncHandler(async (req, res) => {
 
 // GET /api/customer/auth/me — re-fetch the signed-in customer. The app calls this
 // on launch to validate a stored token before trusting it.
+//
+// A customer on 'never' whose token still runs out within a year (one issued
+// before they were moved to 'never') gets a fresh never-expiring token back, so
+// they're never asked to sign in again. The app stores it in place of the old one.
 export const me = asyncHandler(async (req, res) => {
   const customer = await Customer.findByPk(req.customer!.id)
   if (!customer) throw new HttpError(401, 'Invalid session')
-  res.json({ customer: publicCustomer(customer) })
+
+  let token: string | undefined
+  if (customer.get('sessionDuration') === 'never') {
+    const current = jwt.decode(req.headers.authorization!.slice('Bearer '.length)) as { exp?: number } | null
+    const yearFromNow = Date.now() / 1000 + 365 * 24 * 3600
+    if (!current?.exp || current.exp < yearFromNow) {
+      token = await issueCustomerToken(customer, (customer.get('activeDeviceId') as string | null) ?? null)
+    }
+  }
+  res.json({ customer: publicCustomer(customer), ...(token && { token }) })
 })
 
 // POST /api/customer/auth/logout — customer sessions aren't tracked in

@@ -41,7 +41,7 @@ export const Customer = sequelize.define('Customer', {
   sessionDuration: {
     type: DataTypes.ENUM(...SESSION_DURATIONS),
     allowNull: false,
-    defaultValue: '1d',
+    defaultValue: 'never',
   },
   createdAt: createdAtColumn,
 }, { tableName: 'tbl_customers' })
