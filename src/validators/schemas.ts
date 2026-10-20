@@ -2,6 +2,10 @@ import { z } from 'zod'
 
 const SESSION_DURATION = z.enum(['2h', '4h', '12h', '1d', '1w', '1m', '6m', '1y'])
 
+// Weights are grams to the milligram: whatever a client sends is rounded to 3
+// decimals before it's stored, so 12.34567 lands as 12.346.
+const round3 = (n: number) => Math.round(n * 1000) / 1000
+
 // ----- Auth ----------------------------------------------------------------
 export const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email'),
@@ -112,8 +116,8 @@ export const productCreate = z.object({
   // can't sit side by side as two "different" codes.
   sku: z.string().trim().min(1, 'SKU is required'),
   categoryId: z.number().int().positive('Category is required'),
-  grossWeight: z.number().positive('Enter a valid weight'),
-  netWeight: z.number().nullable().optional(),
+  grossWeight: z.number().positive('Enter a valid weight').transform(round3),
+  netWeight: z.number().transform(round3).nullable().optional(),
   // Itemized breakdown of the less (deducted) weight — any number of factor rows.
   // The weight carries the row, so it must be a real positive number; the label is
   // optional, since an unnamed deduction still counts. Display-only; the admin form
@@ -122,7 +126,7 @@ export const productCreate = z.object({
     .array(
       z.object({
         label: z.string().optional().default(''),
-        weight: z.number().positive('Enter a valid factor weight'),
+        weight: z.number().positive('Enter a valid factor weight').transform(round3),
       })
     )
     .nullable()

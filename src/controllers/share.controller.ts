@@ -71,14 +71,17 @@ function photoUrlFor(product: Model, origin: string): string | null {
   return null
 }
 
-/** "22K · Gross 42.5 g · Net 38.2 g · Size 16 inch" — the preview card's subtitle. */
+/** Grams, always to 3 decimals — "42.500 g". */
+const grams = (value: unknown) => `${Number(value).toFixed(3)} g`
+
+/** "22K · Gross 42.500 g · Net 38.200 g · Size 16 inch" — the preview card's subtitle. */
 function summaryFor(product: Model): string {
   const netWeight = product.get('netWeight') as number | null
   const size = product.get('size') as string | null
   return [
     String(product.get('purity')),
-    `Gross ${product.get('grossWeight')} g`,
-    netWeight != null ? `Net ${netWeight} g` : null,
+    `Gross ${grams(product.get('grossWeight'))}`,
+    netWeight != null ? `Net ${grams(netWeight)}` : null,
     size ? `Size ${size}` : null,
   ]
     .filter((part): part is string => part !== null)
@@ -94,8 +97,8 @@ function specRowsFor(product: Model, categoryName: string | null): [string, stri
     ['Code', String(product.get('sku'))],
     categoryName ? ['Category', categoryName] : null,
     ['Purity', String(product.get('purity'))],
-    ['Gross Weight', `${product.get('grossWeight')} g`],
-    netWeight != null ? ['Net Weight', `${netWeight} g`] : null,
+    ['Gross Weight', grams(product.get('grossWeight'))],
+    netWeight != null ? ['Net Weight', grams(netWeight)] : null,
     size ? ['Size', size] : null,
     stone ? ['Stone', stone] : null,
   ].filter((row): row is [string, string] => row !== null)
