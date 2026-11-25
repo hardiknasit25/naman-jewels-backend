@@ -29,6 +29,11 @@ const EnvSchema = z.object({
   // that replaces the compiled output must never touch uploaded files.
   UPLOAD_DIR: z.string().default('uploads'),
 
+  // API keys for the shop's desktop software (/api/integration). Comma-separated
+  // so a new key can be added before the old one is removed; empty disables the
+  // integration API entirely.
+  DESKTOP_API_KEYS: z.string().default(''),
+
   DB_HOST: z.string().default('127.0.0.1'),
   DB_PORT: z.coerce.number().default(3306),
   DB_NAME: z.string().min(1, 'DB_NAME is required'),

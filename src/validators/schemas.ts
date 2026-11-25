@@ -6,6 +6,14 @@ const SESSION_DURATION = z.enum(['2h', '4h', '12h', '1d', '1w', '1m', '6m', '1y'
 // decimals before it's stored, so 12.34567 lands as 12.346.
 const round3 = (n: number) => Math.round(n * 1000) / 1000
 
+/** Trimmed, blank-free tags with case-insensitive duplicates dropped. */
+function normalizeTags(tags: string[]): string[] {
+  const seen = new Set<string>()
+  return tags
+    .map((t) => t.trim())
+    .filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))
+}
+
 // ----- Auth ----------------------------------------------------------------
 export const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email'),
@@ -150,8 +158,41 @@ export const productCreate = z.object({
   // (a tier also sees everything tagged below it), so tagging the lowest tier
   // reaches everyone. Empty means every tier sees it.
   customerTypeIds: z.array(z.number().int().positive()).optional(),
+  tags: z.array(z.string()).transform(normalizeTags).optional(),
 })
 export const productUpdate = productCreate.partial()
+
+// ----- Desktop software integration ----------------------------------------
+// What the shop's VB.NET program sends. Category and carat come as names (the
+// program knows nothing of our ids), and numbers may arrive as strings, so both
+// are coerced. Blank optional values ("" or null) mean "none".
+const blankToNull = (v: unknown) => (v === '' || v === undefined ? null : v)
+const optionalText = z.preprocess(blankToNull, z.string().trim().nullable()).optional()
+const optionalWeight = z
+  .preprocess(blankToNull, z.coerce.number().positive('must be a positive number').transform(round3).nullable())
+  .optional()
+
+export const integrationProduct = z.object({
+  sku: z.string().trim().min(1, 'sku is required').max(80),
+  name: optionalText,
+  category: z.string().trim().min(1, 'category is required'),
+  carat: z.string().trim().min(1, 'carat is required'),
+  grossWeight: z.coerce.number().positive('grossWeight must be a positive number').transform(round3),
+  netWeight: optionalWeight,
+  size: optionalText,
+  stoneDetails: optionalText,
+  notes: optionalText,
+  lessFactors: z
+    .array(
+      z.object({
+        label: z.string().trim().optional().default(''),
+        weight: z.coerce.number().positive('must be a positive number').transform(round3),
+      })
+    )
+    .nullable()
+    .optional(),
+})
+export type IntegrationProduct = z.infer<typeof integrationProduct>
 
 // ----- Banners (4.8) -------------------------------------------------------
 export const bannerCreate = z.object({

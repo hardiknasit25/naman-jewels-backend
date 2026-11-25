@@ -203,6 +203,8 @@ async function ensureColumns(): Promise<void> {
     },
     { table: 'tbl_products', column: 'customerTypeIds', spec: { type: DataTypes.JSON, allowNull: true } },
     { table: 'tbl_products', column: 'lessFactors', spec: { type: DataTypes.JSON, allowNull: true } },
+    { table: 'tbl_products', column: 'tags', spec: { type: DataTypes.JSON, allowNull: true } },
+    { table: 'tbl_products', column: 'soldAt', spec: { type: DataTypes.DATE, allowNull: true } },
     {
       table: 'tbl_products',
       column: 'caratId',

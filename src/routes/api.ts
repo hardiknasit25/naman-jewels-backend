@@ -24,6 +24,7 @@ import {
   reorderCategories,
 } from '../controllers/category.controller.js'
 import { customerRouter } from './customer.js'
+import { integrationRouter } from './integration.js'
 
 export const apiRouter = Router()
 
@@ -38,6 +39,10 @@ apiRouter.post('/auth/login', validate(schemas.loginSchema), login)
 // (and its register/login must stay public). Moving it below `authenticate`
 // would make every customer route demand an admin token.
 apiRouter.use('/customer', customerRouter)
+
+// ----- Desktop software ----------------------------------------------------
+// Also ahead of the admin gate: it authenticates with its own API key.
+apiRouter.use('/integration', integrationRouter)
 
 // ----- Everything below requires a valid ADMIN JWT -------------------------
 apiRouter.use(authenticate)
@@ -137,11 +142,13 @@ apiRouter.use(
     // (plus the NOT NULL constraint on existing databases) keep working. Done here
     // rather than in the client so any API caller gets it right.
     transform: async (body) => {
+      // Setting a sold piece live again puts it back on sale.
+      const out = body.status === 'live' ? { ...body, soldAt: null } : body
       const { caratId } = body as { caratId?: number }
-      if (caratId == null) return body
+      if (caratId == null) return out
       const carat = await Carat.findByPk(caratId)
       if (!carat) throw new HttpError(400, 'Selected carat no longer exists')
-      return { ...body, purity: carat.get('name') as string }
+      return { ...out, purity: carat.get('name') as string }
     },
   })
 )

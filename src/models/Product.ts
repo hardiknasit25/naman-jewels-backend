@@ -43,6 +43,12 @@ export const Product = sequelize.define('Product', {
   // to their own tier or to any tier below theirs (see services/productVisibility).
   // Empty/null means every tier sees it, so untagged products stay visible.
   customerTypeIds: { type: DataTypes.JSON, allowNull: true },
+  // Free-form labels the admin adds ("Bridal", "Lightweight", …) to filter the
+  // product list by. Admin-only; unrelated to the customer tiers above.
+  tags: { type: DataTypes.JSON, allowNull: true },
+  // When the desktop software reported the piece sold. A sold product is kept
+  // (inquiries still point at it) but set to 'private', so no customer sees it.
+  soldAt: { type: DataTypes.DATE, allowNull: true },
   // Primary image (kept for backward compatibility / list thumbnails). Mirrors
   // images[0]. Stored as a Base64 data URL (or a remote URL); LONGTEXT holds large images.
   imageUrl: { type: DataTypes.TEXT('long'), allowNull: true },
