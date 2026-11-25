@@ -42,7 +42,11 @@ async function resolveCategory(input: string): Promise<number> {
       'category_ambiguous'
     )
   }
-  throw new HttpError(400, `Category "${input}" does not exist. Add it in the admin panel first.`, 'category_not_found')
+  throw new HttpError(
+    400,
+    `Category "${input}" does not exist. Valid categories: ${all.map((c) => (c.get('name') as string).trim()).join(', ')}`,
+    'category_not_found'
+  )
 }
 
 /** A carat by its name ("22K") or its fineness ("916"). */
@@ -54,7 +58,8 @@ async function resolveCarat(input: string): Promise<{ id: number; name: string }
   // Prefer a carat still in use if a retired one shares the name.
   const carat = matches.find((c) => c.get('active')) ?? matches[0]
   if (!carat) {
-    throw new HttpError(400, `Carat "${input}" does not exist. Add it in the admin panel first.`, 'carat_not_found')
+    const valid = all.filter((c) => c.get('active')).map((c) => (c.get('name') as string).trim())
+    throw new HttpError(400, `Carat "${input}" does not exist. Valid carats: ${valid.join(', ')}`, 'carat_not_found')
   }
   return { id: carat.get('id') as number, name: carat.get('name') as string }
 }
@@ -93,6 +98,24 @@ function summary(product: InstanceType<typeof Product>) {
 export const ping = (_req: Request, res: Response) => {
   res.json({ ok: true, message: 'API key accepted' })
 }
+
+// GET /api/integration/masters — the category and carat names a product may use,
+// so the desktop software can map its own lists onto ours.
+export const masters = asyncHandler(async (_req, res) => {
+  const [categories, carats] = await Promise.all([
+    Category.findAll({ attributes: ['id', 'name', 'parentId'], order: [['sortOrder', 'ASC']] }),
+    Carat.findAll({ attributes: ['name', 'purity'], where: { active: true }, order: [['order', 'ASC']] }),
+  ])
+  const nameOf = new Map(categories.map((c) => [c.get('id'), (c.get('name') as string).trim()]))
+  res.json({
+    categories: categories.map((c) => {
+      const name = (c.get('name') as string).trim()
+      const parent = c.get('parentId') != null ? nameOf.get(c.get('parentId')) : undefined
+      return { name, parent: parent ?? null, fullName: parent ? `${parent} > ${name}` : name }
+    }),
+    carats: carats.map((c) => ({ name: (c.get('name') as string).trim(), purity: c.get('purity') || null })),
+  })
+})
 
 // POST /api/integration/products — add a product, or update it if the SKU exists.
 // Keyed on SKU so a request retried after a network error never makes a second
